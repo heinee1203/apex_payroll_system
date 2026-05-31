@@ -866,22 +866,36 @@ function PayrollView({
       </div>
 
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-[1180px]">
+        <div className="overflow-hidden">
+          <table className="w-full table-fixed text-[11px] leading-tight">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[4%]" />
+              <col className="w-[4%]" />
+              <col className="w-[9%]" />
+              <col className="w-[7%]" />
+              <col className="w-[7%]" />
+              <col className="w-[7%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[7%]" />
+              <col className="w-[7%]" />
+              <col className="w-[10%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                <th className="px-3 py-2">Employee</th>
-                <th className="px-3 py-2 text-right">Days</th>
-                <th className="px-3 py-2 text-right">Abs</th>
-                <th className="px-3 py-2 text-right">Gross</th>
-                <th className="px-3 py-2 text-right">OT</th>
-                <th className="px-3 py-2 text-right">Late</th>
-                <th className="px-3 py-2 text-right">UT</th>
-                <th className="px-3 py-2 text-right">Absent</th>
-                <th className="px-3 py-2 text-right">Gov</th>
-                <th className="px-3 py-2 text-right">Loans</th>
-                <th className="px-3 py-2 text-right">Adj</th>
-                <th className="px-3 py-2 text-right">Net Pay</th>
+                <th className="px-1.5 py-1.5 text-[10px] tracking-normal">Employee</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Days</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Abs</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Gross</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">OT</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Late</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">UT</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Absent</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Gov</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Loans</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Adj</th>
+                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Net Pay</th>
               </tr>
             </thead>
             <tbody>
@@ -890,21 +904,21 @@ function PayrollView({
 
                 return (
                   <tr key={summary.employee.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="px-3 py-2">
-                      <div className="font-semibold">{summary.employee.name}</div>
-                      <div className="text-xs text-slate-500">{summary.employee.code} | {summary.employee.role}</div>
+                    <td className="px-1.5 py-1.5">
+                      <div className="truncate text-[12px] font-semibold" title={summary.employee.name}>{summary.employee.name}</div>
+                      <div className="truncate text-[10px] text-slate-500">{summary.employee.code} | {summary.employee.role}</div>
                     </td>
-                    <td className="px-3 py-2 text-right">{summary.paidDays}</td>
-                    <td className="px-3 py-2 text-right text-rose-700">{summary.absences || '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono">{formatCurrency(summary.grossPay)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-emerald-700">{summary.overtimePay ? formatCurrency(summary.overtimePay) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono text-rose-700">{summary.lateDeduction ? formatCurrency(summary.lateDeduction) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono text-rose-700">{summary.undertimeDeduction ? formatCurrency(summary.undertimeDeduction) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono text-rose-700">{summary.absenceDeduction ? formatCurrency(summary.absenceDeduction) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono">{government ? formatCurrency(government) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono">{summary.loanDeduction ? formatCurrency(summary.loanDeduction) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono">{summary.adjustment ? formatCurrency(summary.adjustment) : '-'}</td>
-                    <td className="px-3 py-2 text-right font-mono text-base font-bold">{formatCurrency(summary.netPay)}</td>
+                    <td className="px-1.5 py-1.5 text-right">{summary.paidDays}</td>
+                    <td className="px-1.5 py-1.5 text-right text-rose-700">{summary.absences || '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{formatCurrency(summary.grossPay)}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-emerald-700">{summary.overtimePay ? formatCurrency(summary.overtimePay) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.lateDeduction ? formatCurrency(summary.lateDeduction) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.undertimeDeduction ? formatCurrency(summary.undertimeDeduction) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.absenceDeduction ? formatCurrency(summary.absenceDeduction) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{government ? formatCurrency(government) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.loanDeduction ? formatCurrency(summary.loanDeduction) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.adjustment ? formatCurrency(summary.adjustment) : '-'}</td>
+                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-[12px] font-bold">{formatCurrency(summary.netPay)}</td>
                   </tr>
                 )
               })}
