@@ -79,6 +79,7 @@ export function createDefaultWorkspace(): WorkspaceState {
     employees: DEFAULT_EMPLOYEES,
     logs: mergeMissingTimeLogs([], DEFAULT_EMPLOYEES, settings),
     settings,
+    depositSlips: [],
   }
 }
 

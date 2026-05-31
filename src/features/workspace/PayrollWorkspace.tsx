@@ -32,6 +32,7 @@ import {
   mergeMissingTimeLogs,
   normalizeStatus,
   STATUS_LABELS,
+  type DepositSlipAttachment,
   type EmployeeRecord,
   type PayrollSettings,
   type PayrollSummary,
@@ -222,8 +223,28 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
       ...current,
       employees: current.employees.filter((employee) => employee.id !== employeeId),
       logs: current.logs.filter((log) => log.employeeId !== employeeId),
+      depositSlips: current.depositSlips.filter((slip) => slip.employeeId !== employeeId),
     }))
     toast.success('Employee removed')
+  }
+
+  const attachDepositSlip = (attachment: DepositSlipAttachment) => {
+    setWorkspace((current) => ({
+      ...current,
+      depositSlips: [
+        ...current.depositSlips.filter((slip) => slip.id !== attachment.id),
+        attachment,
+      ],
+    }))
+    toast.success('Deposit slip attached')
+  }
+
+  const removeDepositSlip = (attachmentId: string) => {
+    setWorkspace((current) => ({
+      ...current,
+      depositSlips: current.depositSlips.filter((slip) => slip.id !== attachmentId),
+    }))
+    toast.success('Deposit slip removed')
   }
 
   const updateLog = (logId: string, patch: Partial<TimeLogEntry>) => {
@@ -583,9 +604,12 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
                 employees={workspace.employees}
                 logs={workspace.logs}
                 settings={workspace.settings}
+                depositSlips={workspace.depositSlips}
                 selectedEmployeeId={selectedEmployeeInfoId}
                 onSelectEmployee={setSelectedEmployeeInfoId}
                 onUpdateEmployee={updateEmployee}
+                onAttachDepositSlip={attachDepositSlip}
+                onRemoveDepositSlip={removeDepositSlip}
               />
             )}
 
@@ -1400,16 +1424,22 @@ function EmployeeInfoView({
   employees,
   logs,
   settings,
+  depositSlips,
   selectedEmployeeId,
   onSelectEmployee,
   onUpdateEmployee,
+  onAttachDepositSlip,
+  onRemoveDepositSlip,
 }: {
   employees: EmployeeRecord[]
   logs: TimeLogEntry[]
   settings: PayrollSettings
+  depositSlips: DepositSlipAttachment[]
   selectedEmployeeId: string
   onSelectEmployee: (employeeId: string) => void
   onUpdateEmployee: (employeeId: string, patch: Partial<EmployeeRecord>) => void
+  onAttachDepositSlip: (attachment: DepositSlipAttachment) => void
+  onRemoveDepositSlip: (attachmentId: string) => void
 }) {
   const [employeeStatusFilter, setEmployeeStatusFilter] = useState<'active' | 'inactive'>(() => {
     const selected = employees.find((employee) => employee.id === selectedEmployeeId)
@@ -1489,12 +1519,15 @@ function EmployeeInfoView({
         employee={selectedEmployee}
         logs={logs}
         settings={settings}
+        depositSlips={depositSlips}
         onUpdate={(patch) => {
           if (typeof patch.active === 'boolean') {
             setEmployeeStatusFilter(patch.active ? 'active' : 'inactive')
           }
           onUpdateEmployee(selectedEmployee.id, patch)
         }}
+        onAttachDepositSlip={onAttachDepositSlip}
+        onRemoveDepositSlip={onRemoveDepositSlip}
       />
     </section>
   )
@@ -1504,14 +1537,20 @@ function EmployeeDetailPage({
   employee,
   logs,
   settings,
+  depositSlips,
   onBack,
   onUpdate,
+  onAttachDepositSlip,
+  onRemoveDepositSlip,
 }: {
   employee: EmployeeRecord
   logs: TimeLogEntry[]
   settings: PayrollSettings
+  depositSlips: DepositSlipAttachment[]
   onBack?: () => void
   onUpdate: (patch: Partial<EmployeeRecord>) => void
+  onAttachDepositSlip: (attachment: DepositSlipAttachment) => void
+  onRemoveDepositSlip: (attachmentId: string) => void
 }) {
   const history = useMemo(
     () => buildEmployeePayrollHistory(employee, logs, settings),
@@ -1521,6 +1560,15 @@ function EmployeeDetailPage({
   const [selectedDocument, setSelectedDocument] = useState<HistoryDocument>('payslip')
   const [pdfBusy, setPdfBusy] = useState(false)
   const selectedHistory = history.find((entry) => entry.periodKey === selectedPeriodKey) || history[0]
+  const depositSlipByPeriod = useMemo(
+    () => new Map(
+      depositSlips
+        .filter((slip) => slip.employeeId === employee.id)
+        .map((slip) => [slip.periodKey, slip])
+    ),
+    [depositSlips, employee.id]
+  )
+  const selectedDepositSlip = selectedHistory ? depositSlipByPeriod.get(selectedHistory.periodKey) : undefined
 
   const handleExportPayslipPdf = async () => {
     if (!selectedHistory || pdfBusy) return
@@ -1535,6 +1583,39 @@ function EmployeeDetailPage({
   const openHistoryDocument = (periodKey: string, document: HistoryDocument) => {
     setSelectedPeriodKey(periodKey)
     setSelectedDocument(document)
+  }
+
+  const handleDepositSlipSelected = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !selectedHistory) return
+
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+      toast.error('Use an image or PDF deposit slip')
+      return
+    }
+
+    if (file.size > 4 * 1024 * 1024) {
+      toast.error('Deposit slip must be 4 MB or smaller')
+      return
+    }
+
+    try {
+      const dataUrl = await readFileAsDataUrl(file)
+      onAttachDepositSlip({
+        id: makeDepositSlipId(employee.id, selectedHistory.periodStart, selectedHistory.periodEnd),
+        employeeId: employee.id,
+        periodKey: selectedHistory.periodKey,
+        periodStart: selectedHistory.periodStart,
+        periodEnd: selectedHistory.periodEnd,
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        dataUrl,
+        uploadedAt: new Date().toISOString(),
+      })
+    } catch {
+      toast.error('Failed to attach deposit slip')
+    }
   }
 
   return (
@@ -1613,6 +1694,9 @@ function EmployeeDetailPage({
                     <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(entry.summary.netPay)}</td>
                     <td className="px-3 py-2 text-right">
                       <div className="flex justify-end gap-1">
+                        {depositSlipByPeriod.has(entry.periodKey) && (
+                          <span className="badge-info px-1.5 py-1 text-[10px]">Slip</span>
+                        )}
                         <button
                           className={`btn-ghost px-2 py-1 text-xs ${
                             selectedHistory?.periodKey === entry.periodKey && selectedDocument === 'payslip' ? 'bg-slate-100' : ''
@@ -1693,6 +1777,12 @@ function EmployeeDetailPage({
                 )}
               </div>
             </div>
+            <DepositSlipPanel
+              depositSlip={selectedDepositSlip}
+              inputId={`deposit-slip-${employee.id}-${selectedHistory.periodStart}-${selectedHistory.periodEnd}`}
+              onFileSelected={handleDepositSlipSelected}
+              onRemove={onRemoveDepositSlip}
+            />
             {selectedDocument === 'payslip' ? (
               <EmployeePayslip entry={selectedHistory} />
             ) : (
@@ -1708,6 +1798,83 @@ function EmployeeDetailPage({
           </div>
         )}
       </div>
+    </section>
+  )
+}
+
+function DepositSlipPanel({
+  depositSlip,
+  inputId,
+  onFileSelected,
+  onRemove,
+}: {
+  depositSlip?: DepositSlipAttachment
+  inputId: string
+  onFileSelected: (event: ChangeEvent<HTMLInputElement>) => void
+  onRemove: (attachmentId: string) => void
+}) {
+  const isImage = depositSlip?.mimeType.startsWith('image/')
+
+  return (
+    <section className="no-print rounded-md border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Deposit Slip</h3>
+          {depositSlip ? (
+            <p className="mt-1 text-sm text-slate-500">
+              {depositSlip.fileName} | {new Date(depositSlip.uploadedAt).toLocaleDateString('en-PH')}
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-slate-500">No deposit slip attached</p>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <label htmlFor={inputId} className="btn-secondary">
+            <Upload size={16} />
+            {depositSlip ? 'Replace Slip' : 'Attach Slip'}
+          </label>
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*,application/pdf"
+            onChange={onFileSelected}
+            className="hidden"
+          />
+          {depositSlip && (
+            <>
+              <a className="btn-secondary" href={depositSlip.dataUrl} target="_blank" rel="noreferrer">
+                <FileText size={16} />
+                Open
+              </a>
+              <a className="btn-secondary" href={depositSlip.dataUrl} download={depositSlip.fileName}>
+                <Download size={16} />
+                Download
+              </a>
+              <button className="btn-ghost text-rose-700" onClick={() => onRemove(depositSlip.id)}>
+                <Trash2 size={16} />
+                Remove
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {depositSlip && (
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          {isImage ? (
+            <img
+              src={depositSlip.dataUrl}
+              alt={depositSlip.fileName}
+              className="max-h-72 w-full rounded border border-slate-200 bg-white object-contain"
+            />
+          ) : (
+            <div className="flex items-center gap-3 text-sm text-slate-600">
+              <FileText className="text-slate-500" size={22} />
+              <span className="font-medium text-slate-800">{depositSlip.fileName}</span>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   )
 }
@@ -2091,6 +2258,25 @@ function formatUndertimeLabel(hours: number): string {
   return `UNDER TIME ( ${formatPayslipHours(hours)} HRS )`
 }
 
+function makeDepositSlipId(employeeId: string, periodStart: string, periodEnd: string): string {
+  return `${employeeId}|${periodStart}|${periodEnd}`
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+      } else {
+        reject(new Error('Unsupported file result'))
+      }
+    }
+    reader.onerror = () => reject(reader.error || new Error('Unable to read file'))
+    reader.readAsDataURL(file)
+  })
+}
+
 async function exportPayslipPdf(entry: PayrollHistoryEntry) {
   const page = document.querySelector<HTMLElement>('[data-payslip-page]')
 
@@ -2431,6 +2617,7 @@ function loadWorkspace(): WorkspaceState {
       settings: { ...fallback.settings, ...parsed.settings },
       employees: mergedEmployees,
       logs: parsed.logs?.length ? parsed.logs : fallback.logs,
+      depositSlips: Array.isArray(parsed.depositSlips) ? parsed.depositSlips : fallback.depositSlips,
     })
   } catch {
     return fallback
@@ -2442,6 +2629,16 @@ function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
 
   return {
     ...workspace,
+    depositSlips: (workspace.depositSlips || [])
+      .filter((slip) =>
+        slip.id &&
+        employeesById.has(slip.employeeId) &&
+        slip.periodKey &&
+        slip.periodStart &&
+        slip.periodEnd &&
+        slip.fileName &&
+        slip.dataUrl
+      ),
     logs: workspace.logs.map((log) => {
       const holiday = HOLIDAYS_2026[log.date]
       const employee = employeesById.get(log.employeeId)

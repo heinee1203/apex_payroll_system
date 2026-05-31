@@ -55,10 +55,23 @@ export interface PayrollSettings {
   deductPagIbig: boolean
 }
 
+export interface DepositSlipAttachment {
+  id: string
+  employeeId: string
+  periodKey: string
+  periodStart: string
+  periodEnd: string
+  fileName: string
+  mimeType: string
+  dataUrl: string
+  uploadedAt: string
+}
+
 export interface WorkspaceState {
   employees: EmployeeRecord[]
   logs: TimeLogEntry[]
   settings: PayrollSettings
+  depositSlips: DepositSlipAttachment[]
 }
 
 export interface DailyComputation {
