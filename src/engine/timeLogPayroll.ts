@@ -9,7 +9,7 @@ import { lookupSSS } from './sss'
 import { OT_RATE_MULTIPLIER } from '../lib/constants'
 
 export type PayType = 'monthly' | 'daily'
-export type TimeLogStatus = 'present' | 'absent' | 'paid_leave' | 'holiday' | 'rest_day'
+export type TimeLogStatus = 'present' | 'absent' | 'paid_leave' | 'holiday' | 'legal_holiday' | 'non_working_holiday' | 'rest_day'
 export type WorkspaceView = 'logs' | 'payroll' | 'employees' | 'settings'
 
 export interface WorkSchedule {
@@ -111,23 +111,26 @@ export const STATUS_LABELS: Record<TimeLogStatus, string> = {
   absent: 'Absent',
   paid_leave: 'Paid Leave',
   holiday: 'Holiday',
+  legal_holiday: 'Legal Holiday',
+  non_working_holiday: 'Non-working Holiday',
   rest_day: 'Rest Day',
 }
 
-export const HOLIDAYS_2026: Record<string, string> = {
-  '2026-01-01': "New Year's Day",
-  '2026-01-29': 'Chinese New Year',
-  '2026-02-25': 'EDSA Anniversary',
-  '2026-04-01': 'Maundy Thursday',
-  '2026-04-02': 'Good Friday',
-  '2026-04-03': 'Black Saturday',
-  '2026-04-09': 'Araw ng Kagitingan',
-  '2026-05-01': 'Labor Day',
-  '2026-06-12': 'Independence Day',
-  '2026-08-31': 'National Heroes Day',
-  '2026-11-30': 'Bonifacio Day',
-  '2026-12-25': 'Christmas Day',
-  '2026-12-30': 'Rizal Day',
+export const HOLIDAYS_2026: Record<string, { name: string; status: 'legal_holiday' | 'non_working_holiday' }> = {
+  '2026-01-01': { name: "New Year's Day", status: 'legal_holiday' },
+  '2026-01-29': { name: 'Chinese New Year', status: 'non_working_holiday' },
+  '2026-02-25': { name: 'EDSA Anniversary', status: 'non_working_holiday' },
+  '2026-04-01': { name: 'Maundy Thursday', status: 'legal_holiday' },
+  '2026-04-02': { name: 'Good Friday', status: 'legal_holiday' },
+  '2026-04-03': { name: 'Black Saturday', status: 'non_working_holiday' },
+  '2026-04-09': { name: 'Araw ng Kagitingan', status: 'legal_holiday' },
+  '2026-05-01': { name: 'Labor Day', status: 'legal_holiday' },
+  '2026-05-27': { name: 'Eid al-Adha', status: 'legal_holiday' },
+  '2026-06-12': { name: 'Independence Day', status: 'legal_holiday' },
+  '2026-08-31': { name: 'National Heroes Day', status: 'legal_holiday' },
+  '2026-11-30': { name: 'Bonifacio Day', status: 'legal_holiday' },
+  '2026-12-25': { name: 'Christmas Day', status: 'legal_holiday' },
+  '2026-12-30': { name: 'Rizal Day', status: 'legal_holiday' },
 }
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100
@@ -136,6 +139,40 @@ const roundHours = (value: number) => Math.round(value * 100) / 100
 function parseDateKey(dateKey: string): Date {
   const [year, month, day] = dateKey.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+function countNonSundayDays(startDate: string, endDate: string): number {
+  let count = 0
+  const current = parseDateKey(startDate)
+  const end = parseDateKey(endDate)
+
+  while (current <= end) {
+    if (current.getDay() !== 0) count += 1
+    current.setDate(current.getDate() + 1)
+  }
+
+  return count
+}
+
+function getMonthlyNonSundayDays(dateKey: string): number {
+  const date = parseDateKey(dateKey)
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const firstDay = toDateKey(new Date(year, month, 1))
+  const lastDay = toDateKey(new Date(year, month + 1, 0))
+
+  return countNonSundayDays(firstDay, lastDay)
+}
+
+function isSaturday(dateKey: string): boolean {
+  return parseDateKey(dateKey).getDay() === 6
+}
+
+function isPaidHoliday(status: TimeLogStatus): boolean {
+  return status === 'paid_leave' ||
+    status === 'holiday' ||
+    status === 'legal_holiday' ||
+    status === 'non_working_holiday'
 }
 
 export function toDateKey(date: Date): string {
@@ -185,8 +222,8 @@ export function getDefaultStatusForDate(employee: EmployeeRecord, dateKey: strin
   const day = parseDateKey(dateKey).getDay()
 
   if (day === 0) return 'rest_day'
+  if (HOLIDAYS_2026[dateKey]) return HOLIDAYS_2026[dateKey].status
   if (day === 6 && !employee.saturdayPaid) return 'rest_day'
-  if (HOLIDAYS_2026[dateKey]) return 'holiday'
 
   return 'present'
 }
@@ -202,7 +239,7 @@ export function makeTimeLog(employee: EmployeeRecord, date: string): TimeLogEntr
     timeIn: status === 'present' ? employee.schedule.start : '',
     timeOut: status === 'present' ? employee.schedule.end : '',
     otApproved: false,
-    notes: HOLIDAYS_2026[date] || '',
+    notes: HOLIDAYS_2026[date]?.name || '',
   }
 }
 
@@ -230,6 +267,18 @@ export function mergeMissingTimeLogs(
 
 export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): DailyComputation {
   if (log.status === 'rest_day') {
+    if (isSaturday(log.date)) {
+      return {
+        regularHours: 8,
+        lateHours: 0,
+        undertimeHours: 0,
+        overtimeHours: 0,
+        paidDay: true,
+        absentDay: false,
+        incomplete: false,
+      }
+    }
+
     return {
       regularHours: 0,
       lateHours: 0,
@@ -253,7 +302,7 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
     }
   }
 
-  if (log.status === 'paid_leave' || log.status === 'holiday') {
+  if (isPaidHoliday(log.status)) {
     return {
       regularHours: 8,
       lateHours: 0,
@@ -290,7 +339,11 @@ export function computeEmployeePayroll(
   settings: PayrollSettings,
   sssBrackets: SSSBracket[]
 ): PayrollSummary {
-  const dailyRate = getDailyRate(employee.basicPay, employee.payType)
+  const monthlyPayableDays = Math.max(1, getMonthlyNonSundayDays(settings.periodStart))
+  const periodPayableDays = countNonSundayDays(settings.periodStart, settings.periodEnd)
+  const dailyRate = employee.payType === 'monthly'
+    ? employee.basicPay / monthlyPayableDays
+    : getDailyRate(employee.basicPay, employee.payType)
   const hourlyRate = getHourlyRate(dailyRate)
   const monthlyEquivalent = employee.payType === 'monthly' ? employee.basicPay : dailyRate * 24
 
@@ -314,7 +367,7 @@ export function computeEmployeePayroll(
   }
 
   const grossPay = employee.payType === 'monthly'
-    ? roundMoney(employee.basicPay / 2)
+    ? roundMoney(periodPayableDays * dailyRate)
     : roundMoney(paidDays * dailyRate)
   const overtimePay = roundMoney(overtimeHours * hourlyRate * OT_RATE_MULTIPLIER)
   const lateDeduction = roundMoney(lateHours * hourlyRate)
@@ -395,6 +448,8 @@ export function normalizeStatus(value: string): TimeLogStatus {
   if (normalized === 'absent' || normalized === 'a') return 'absent'
   if (normalized === 'leave' || normalized === 'paid_leave' || normalized === 'paidleave') return 'paid_leave'
   if (normalized === 'holiday' || normalized === 'h') return 'holiday'
+  if (normalized === 'legal_holiday' || normalized === 'regular_holiday' || normalized === 'lh') return 'legal_holiday'
+  if (normalized === 'non_working_holiday' || normalized === 'nonworking_holiday' || normalized === 'special_holiday' || normalized === 'nwh') return 'non_working_holiday'
   if (normalized === 'rest' || normalized === 'rest_day' || normalized === 'off') return 'rest_day'
 
   return 'present'

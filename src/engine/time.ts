@@ -69,7 +69,9 @@ export function computeRegularHours(
 
 /**
  * Get daily rate from employee info.
- * Monthly employees: basic_pay / 24
+ * Monthly employees: basic_pay / 24 by default.
+ * The workspace payroll engine overrides this with the current month's
+ * non-Sunday day count for semi-monthly payroll.
  * Daily employees: basic_pay (is already the daily rate)
  */
 export function getDailyRate(basicPay: number, payType: 'monthly' | 'daily'): number {

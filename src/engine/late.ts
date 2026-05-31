@@ -1,21 +1,11 @@
 import { parseTime } from './time'
-import { GRACE_PERIOD_MINUTES, LATE_INCREMENT_MINUTES, LATE_DEDUCTION_PER_INCREMENT } from '../lib/constants'
+import { GRACE_PERIOD_MINUTES, LATE_DEDUCTION_PER_INCREMENT, LATE_INCREMENT_MINUTES } from '../lib/constants'
 
 /**
  * Compute late deduction hours.
  *
- * Rules:
- * - 15-minute grace period on time-in
- * - Over 15 minutes late → 0.25 hr deduction
- * - Over 30 minutes late → 0.50 hr deduction
- * - Continues in 15-min increments
- *
- * Formula: late_hours = CEIL((minutes_late - 15) / 15) * 0.25
- *          (when minutes_late > 15, otherwise 0)
- *
- * @param timeIn - Clock-in time "HH:MM"
- * @param scheduleStart - Scheduled start time "HH:MM"
- * @returns Late deduction in hours (e.g., 0.25, 0.50, 0.75...)
+ * A 15-minute grace period is free. After that, late time is rounded down
+ * into 15-minute bands: 16-29 = 0.25 hr, 30-44 = 0.50 hr, 45-59 = 0.75 hr.
  */
 export function computeLateHours(
   timeIn: string | null,
@@ -29,7 +19,6 @@ export function computeLateHours(
 
   if (minutesLate <= GRACE_PERIOD_MINUTES) return 0
 
-  // CEIL((minutesLate - 15) / 15) * 0.25
-  const increments = Math.ceil((minutesLate - GRACE_PERIOD_MINUTES) / LATE_INCREMENT_MINUTES)
+  const increments = Math.floor(minutesLate / LATE_INCREMENT_MINUTES)
   return increments * LATE_DEDUCTION_PER_INCREMENT
 }

@@ -27,6 +27,7 @@ import {
   computeWorkspaceTotals,
   generateDateRange,
   getDayName,
+  HOLIDAYS_2026,
   mergeMissingTimeLogs,
   normalizeStatus,
   STATUS_LABELS,
@@ -650,7 +651,7 @@ function TimeLogsView({
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-[1040px]">
+          <table className="min-w-[1120px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-3 py-2">Date</th>
@@ -681,7 +682,7 @@ function TimeLogsView({
                       <select
                         value={log.status}
                         onChange={(event) => onUpdateLog(log.id, { status: event.target.value as TimeLogStatus })}
-                        className="select min-w-32 py-1"
+                        className="select min-w-44 py-1"
                       >
                         {Object.entries(STATUS_LABELS).map(([value, label]) => (
                           <option key={value} value={value}>{label}</option>
@@ -1020,7 +1021,7 @@ function EmployeesView({
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2 text-right">Basic Pay</th>
                 <th className="px-3 py-2">Schedule</th>
-                <th className="px-3 py-2 text-center">Sat</th>
+                <th className="px-3 py-2 text-center">Sat Work</th>
                 <th className="px-3 py-2 text-center">SSS</th>
                 <th className="px-3 py-2 text-center">PhilH</th>
                 <th className="px-3 py-2 text-center">HDMF</th>
@@ -1518,7 +1519,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: b
 function rowTone(status: TimeLogStatus, incomplete: boolean) {
   if (incomplete) return 'bg-amber-50'
   if (status === 'absent') return 'bg-rose-50'
-  if (status === 'holiday' || status === 'paid_leave') return 'bg-emerald-50'
+  if (status === 'holiday' || status === 'legal_holiday' || status === 'non_working_holiday' || status === 'paid_leave') return 'bg-emerald-50'
   if (status === 'rest_day') return 'bg-slate-50 text-slate-500'
   return 'bg-white'
 }
@@ -1813,7 +1814,9 @@ function extractTimesFromOcrLine(line: string): string[] {
 function inferStatusFromLine(line: string): TimeLogStatus {
   if (/\b(abs|absent)\b/i.test(line)) return 'absent'
   if (/\b(leave|vl|sl|paid leave)\b/i.test(line)) return 'paid_leave'
-  if (/\b(holiday|hol)\b/i.test(line)) return 'holiday'
+  if (/\b(legal|regular)\s+(holiday|hol)\b/i.test(line)) return 'legal_holiday'
+  if (/\b(non[-\s]?working|special)\s+(holiday|hol)\b/i.test(line)) return 'non_working_holiday'
+  if (/\b(holiday|hol)\b/i.test(line)) return 'legal_holiday'
   if (/\b(rest|off|rd)\b/i.test(line)) return 'rest_day'
   return 'present'
 }
@@ -1896,16 +1899,45 @@ function loadWorkspace(): WorkspaceState {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return fallback
     const parsed = JSON.parse(raw) as WorkspaceState
+    const mergedEmployees = parsed.employees?.length ? parsed.employees : fallback.employees
 
-    return {
+    return migrateWorkspace({
       ...fallback,
       ...parsed,
       settings: { ...fallback.settings, ...parsed.settings },
-      employees: parsed.employees?.length ? parsed.employees : fallback.employees,
+      employees: mergedEmployees,
       logs: parsed.logs?.length ? parsed.logs : fallback.logs,
-    }
+    })
   } catch {
     return fallback
+  }
+}
+
+function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
+  const employeesById = new Map(workspace.employees.map((employee) => [employee.id, employee]))
+
+  return {
+    ...workspace,
+    logs: workspace.logs.map((log) => {
+      const holiday = HOLIDAYS_2026[log.date]
+      const employee = employeesById.get(log.employeeId)
+      const untouchedDefaultLog = employee &&
+        log.status === 'present' &&
+        log.timeIn === employee.schedule.start &&
+        log.timeOut === employee.schedule.end &&
+        !log.notes
+
+      if (!holiday || !untouchedDefaultLog) return log
+
+      return {
+        ...log,
+        status: holiday.status,
+        timeIn: '',
+        timeOut: '',
+        otApproved: false,
+        notes: holiday.name,
+      }
+    }),
   }
 }
 
