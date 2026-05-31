@@ -10,7 +10,7 @@ import { OT_RATE_MULTIPLIER } from '../lib/constants'
 
 export type PayType = 'monthly' | 'daily'
 export type TimeLogStatus = 'present' | 'absent' | 'paid_leave' | 'holiday' | 'legal_holiday' | 'non_working_holiday' | 'rest_day'
-export type WorkspaceView = 'logs' | 'payroll' | 'employees' | 'settings'
+export type WorkspaceView = 'logs' | 'payroll' | 'employees' | 'employee-info' | 'settings'
 
 export interface WorkSchedule {
   start: string

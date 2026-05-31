@@ -47,6 +47,7 @@ const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Clock }> 
   { id: 'logs', label: 'Time Logs', icon: Clock },
   { id: 'payroll', label: 'Payroll', icon: Calculator },
   { id: 'employees', label: 'Employees', icon: Users },
+  { id: 'employee-info', label: 'Employee Info', icon: FileText },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -56,6 +57,10 @@ export function PayrollWorkspace() {
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
     const initial = loadWorkspace()
     return initial.employees.find((employee) => employee.active)?.id || ''
+  })
+  const [selectedEmployeeInfoId, setSelectedEmployeeInfoId] = useState(() => {
+    const initial = loadWorkspace()
+    return initial.employees[0]?.id || ''
   })
   const [importText, setImportText] = useState('')
   const [dtrPhotoUrl, setDtrPhotoUrl] = useState('')
@@ -70,6 +75,11 @@ export function PayrollWorkspace() {
   useEffect(() => {
     saveWorkspace(workspace)
   }, [workspace])
+
+  useEffect(() => {
+    if (workspace.employees.some((employee) => employee.id === selectedEmployeeInfoId)) return
+    setSelectedEmployeeInfoId(workspace.employees[0]?.id || '')
+  }, [selectedEmployeeInfoId, workspace.employees])
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -196,6 +206,7 @@ export function PayrollWorkspace() {
       logs: mergeMissingTimeLogs(current.logs, [...current.employees, employee], current.settings),
     }))
     setSelectedEmployeeId(employee.id)
+    setSelectedEmployeeInfoId(employee.id)
     setView('employees')
     toast.success('Employee added')
   }
@@ -541,11 +552,20 @@ export function PayrollWorkspace() {
             {view === 'employees' && (
               <EmployeesView
                 employees={workspace.employees}
-                logs={workspace.logs}
-                settings={workspace.settings}
                 onAdd={addEmployee}
                 onRemove={removeEmployee}
                 onUpdate={updateEmployee}
+              />
+            )}
+
+            {view === 'employee-info' && (
+              <EmployeeInfoView
+                employees={workspace.employees}
+                logs={workspace.logs}
+                settings={workspace.settings}
+                selectedEmployeeId={selectedEmployeeInfoId}
+                onSelectEmployee={setSelectedEmployeeInfoId}
+                onUpdateEmployee={updateEmployee}
               />
             )}
 
@@ -996,39 +1016,21 @@ function PayrollView({
 
 function EmployeesView({
   employees,
-  logs,
-  settings,
   onAdd,
   onRemove,
   onUpdate,
 }: {
   employees: EmployeeRecord[]
-  logs: TimeLogEntry[]
-  settings: PayrollSettings
   onAdd: () => void
   onRemove: (employeeId: string) => void
   onUpdate: (employeeId: string, patch: Partial<EmployeeRecord>) => void
 }) {
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active')
-  const [selectedEmployeePageId, setSelectedEmployeePageId] = useState('')
   const activeCount = employees.filter((employee) => employee.active).length
   const inactiveCount = employees.length - activeCount
   const visibleEmployees = employees.filter((employee) =>
     statusFilter === 'active' ? employee.active : !employee.active
   )
-  const selectedEmployeePage = employees.find((employee) => employee.id === selectedEmployeePageId)
-
-  if (selectedEmployeePage) {
-    return (
-      <EmployeeDetailPage
-        employee={selectedEmployeePage}
-        logs={logs}
-        settings={settings}
-        onBack={() => setSelectedEmployeePageId('')}
-        onUpdate={(patch) => onUpdate(selectedEmployeePage.id, patch)}
-      />
-    )
-  }
 
   return (
     <section className="space-y-4">
@@ -1200,10 +1202,6 @@ function EmployeesView({
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-1">
-                      <button className="btn-ghost px-2 py-1 text-xs text-cyan-700" onClick={() => setSelectedEmployeePageId(employee.id)} title="Open payslip history">
-                        <FileText size={15} />
-                        Payslip
-                      </button>
                       <button className="btn-ghost p-1 text-rose-700" onClick={() => onRemove(employee.id)} title="Remove employee">
                         <Trash2 size={16} />
                       </button>
@@ -1227,6 +1225,62 @@ type PayrollHistoryEntry = {
   summary: PayrollSummary
 }
 
+function EmployeeInfoView({
+  employees,
+  logs,
+  settings,
+  selectedEmployeeId,
+  onSelectEmployee,
+  onUpdateEmployee,
+}: {
+  employees: EmployeeRecord[]
+  logs: TimeLogEntry[]
+  settings: PayrollSettings
+  selectedEmployeeId: string
+  onSelectEmployee: (employeeId: string) => void
+  onUpdateEmployee: (employeeId: string, patch: Partial<EmployeeRecord>) => void
+}) {
+  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) || employees[0]
+
+  if (!selectedEmployee) {
+    return (
+      <section className="card p-8 text-center">
+        <h2 className="text-xl font-bold">Employee Info</h2>
+        <p className="mt-2 text-sm text-slate-500">Add an employee first to view payroll history and payslips.</p>
+      </section>
+    )
+  }
+
+  return (
+    <section className="space-y-4">
+      <div className="no-print flex flex-col gap-3 rounded-md border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-xl font-bold">Employee Info</h2>
+          <p className="mt-1 text-sm text-slate-500">Payroll history, payslips, and employee summary</p>
+        </div>
+        <select
+          value={selectedEmployee.id}
+          onChange={(event) => onSelectEmployee(event.target.value)}
+          className="select max-w-md"
+        >
+          {employees.map((employee) => (
+            <option key={employee.id} value={employee.id}>
+              {employee.code} - {employee.name}{employee.active ? '' : ' (Inactive)'}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <EmployeeDetailPage
+        employee={selectedEmployee}
+        logs={logs}
+        settings={settings}
+        onUpdate={(patch) => onUpdateEmployee(selectedEmployee.id, patch)}
+      />
+    </section>
+  )
+}
+
 function EmployeeDetailPage({
   employee,
   logs,
@@ -1237,7 +1291,7 @@ function EmployeeDetailPage({
   employee: EmployeeRecord
   logs: TimeLogEntry[]
   settings: PayrollSettings
-  onBack: () => void
+  onBack?: () => void
   onUpdate: (patch: Partial<EmployeeRecord>) => void
 }) {
   const history = useMemo(
@@ -1262,10 +1316,12 @@ function EmployeeDetailPage({
     <section className="space-y-4">
       <div className="no-print flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <button className="btn-secondary w-fit" onClick={onBack}>
-            <ArrowLeft size={16} />
-            Employees
-          </button>
+          {onBack && (
+            <button className="btn-secondary w-fit" onClick={onBack}>
+              <ArrowLeft size={16} />
+              Employees
+            </button>
+          )}
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-xl font-bold">{employee.name}</h2>
