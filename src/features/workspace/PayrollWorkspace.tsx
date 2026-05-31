@@ -1245,7 +1245,18 @@ function EmployeeDetailPage({
     [employee, logs, settings]
   )
   const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
   const selectedHistory = history.find((entry) => entry.periodKey === selectedPeriodKey) || history[0]
+
+  const handleExportPayslipPdf = async () => {
+    if (!selectedHistory || pdfBusy) return
+    setPdfBusy(true)
+    try {
+      await exportPayslipPdf(selectedHistory)
+    } finally {
+      setPdfBusy(false)
+    }
+  }
 
   return (
     <section className="space-y-4">
@@ -1339,10 +1350,16 @@ function EmployeeDetailPage({
                 <h3 className="text-base font-semibold">Payslip</h3>
                 <p className="text-sm text-slate-500">{formatPayslipPeriod(selectedHistory.periodStart, selectedHistory.periodEnd)}</p>
               </div>
-              <button className="btn-secondary" onClick={printPayslip}>
-                <Printer size={16} />
-                Print Payslip
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button className="btn-secondary" onClick={handleExportPayslipPdf} disabled={pdfBusy}>
+                  <Download size={16} />
+                  {pdfBusy ? 'Exporting...' : 'Export PDF'}
+                </button>
+                <button className="btn-secondary" onClick={printPayslip}>
+                  <Printer size={16} />
+                  Print Payslip
+                </button>
+              </div>
             </div>
             <EmployeePayslip entry={selectedHistory} />
           </div>
@@ -1361,18 +1378,18 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
 
   return (
     <div className="overflow-x-auto rounded-md bg-white p-4 shadow-sm payslip-print-area">
-      <div className="mx-auto min-w-[820px] max-w-[960px] bg-white text-black">
-        <div className="border-2 border-black font-sans text-[13px] leading-tight">
+      <div className="payslip-document mx-auto min-w-[820px] max-w-[960px] bg-white text-black" data-payslip-page>
+        <div className="border-2 border-black text-[13px] leading-tight">
           <div className="border-b-2 border-black py-3 text-center text-2xl font-bold">PAYSLIP</div>
           <div className="grid grid-cols-[90px_1.1fr_90px_1.1fr_70px_120px] px-1 py-1">
             <div className="font-bold">DATE:</div>
-            <div className="font-bold text-blue-700">{formatPayslipDate(entry.periodEnd)}</div>
+            <div className="payslip-blue font-bold">{formatPayslipDate(entry.periodEnd)}</div>
             <div className="font-bold">PERIOD :</div>
-            <div className="font-bold text-blue-700">{formatPayslipPeriod(entry.periodStart, entry.periodEnd)}</div>
+            <div className="payslip-blue font-bold">{formatPayslipPeriod(entry.periodStart, entry.periodEnd)}</div>
             <div className="font-bold">TYPE:</div>
-            <div className="font-bold text-blue-700">{getPayslipType(entry.periodEnd)}</div>
+            <div className="payslip-blue font-bold">{getPayslipType(entry.periodEnd)}</div>
             <div className="font-bold">NAME:</div>
-            <div className="col-span-5 font-bold text-blue-700">{summary.employee.name}</div>
+            <div className="payslip-blue col-span-5 font-bold">{summary.employee.name}</div>
           </div>
 
           <div className="grid grid-cols-2 border-y-2 border-black">
@@ -1692,6 +1709,57 @@ function formatPayslipMoney(amount: number, dashForZero = true): string {
 
 function formatPayslipHours(hours: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(2)
+}
+
+async function exportPayslipPdf(entry: PayrollHistoryEntry) {
+  const page = document.querySelector<HTMLElement>('[data-payslip-page]')
+
+  if (!page) {
+    toast.error('Payslip is not ready to export')
+    return
+  }
+
+  try {
+    await document.fonts?.ready
+    const [{ default: html2canvas }, { jsPDF }] = await Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ])
+    const canvas = await html2canvas(page, {
+      backgroundColor: '#ffffff',
+      logging: false,
+      scale: 3,
+      useCORS: true,
+      windowHeight: page.scrollHeight,
+      windowWidth: page.scrollWidth,
+    })
+    const pdf = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })
+    const pdfWidth = pdf.internal.pageSize.getWidth()
+    const pdfHeight = pdf.internal.pageSize.getHeight()
+    const margin = 10
+    const maxWidth = pdfWidth - margin * 2
+    const maxHeight = pdfHeight - margin * 2
+    const ratio = Math.min(maxWidth / canvas.width, maxHeight / canvas.height)
+    const imageWidth = canvas.width * ratio
+    const imageHeight = canvas.height * ratio
+    const x = (pdfWidth - imageWidth) / 2
+    const y = margin
+
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', x, y, imageWidth, imageHeight)
+    pdf.save(makePayslipFileName(entry))
+    toast.success('Payslip PDF exported')
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : 'Failed to export payslip PDF')
+  }
+}
+
+function makePayslipFileName(entry: PayrollHistoryEntry): string {
+  const safeName = `${entry.summary.employee.code}-${entry.summary.employee.name}`
+    .replace(/[^a-z0-9]+/gi, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase()
+
+  return `${safeName}-${entry.periodStart}-to-${entry.periodEnd}-payslip.pdf`
 }
 
 function printPayslip() {
