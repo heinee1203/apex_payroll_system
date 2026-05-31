@@ -1722,7 +1722,7 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
                 <div className="px-1 py-1">AMOUNT:</div>
               </div>
               <div className="grid min-h-[290px] grid-cols-[1fr_190px] content-start gap-y-2 px-1 py-1">
-                <div>ABSENCES</div>
+                <div>{formatAbsenceLabel(summary.absences)}</div>
                 <div className="payslip-amount">{formatPayslipMoney(summary.absenceDeduction)}</div>
                 {summary.lateDeduction > 0 && (
                   <>
@@ -1730,7 +1730,7 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
                     <div className="payslip-amount">{formatPayslipMoney(summary.lateDeduction)}</div>
                   </>
                 )}
-                <div>UNDER TIME ( {formatPayslipHours(summary.undertimeHours)} HRS )</div>
+                <div>{formatUndertimeLabel(summary.undertimeHours)}</div>
                 <div className="payslip-amount">{formatPayslipMoney(summary.undertimeDeduction)}</div>
                 <div>HDMF LOAN</div>
                 <div className="payslip-amount">{formatPayslipMoney(summary.loanDeduction)}</div>
@@ -2031,6 +2031,16 @@ function formatPayslipMoney(amount: number, dashForZero = true): string {
 
 function formatPayslipHours(hours: number): string {
   return Number.isInteger(hours) ? String(hours) : hours.toFixed(2)
+}
+
+function formatAbsenceLabel(absences: number): string {
+  const dayLabel = absences === 1 ? 'DAY' : 'DAYS'
+  return `ABSENCES ( ${absences} ${dayLabel} )`
+}
+
+function formatUndertimeLabel(hours: number): string {
+  if (Math.abs(hours) < 0.005) return 'UNDER TIME'
+  return `UNDER TIME ( ${formatPayslipHours(hours)} HRS )`
 }
 
 async function exportPayslipPdf(entry: PayrollHistoryEntry) {
