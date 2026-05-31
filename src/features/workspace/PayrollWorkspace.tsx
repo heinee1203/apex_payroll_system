@@ -862,25 +862,29 @@ function DtrReport({
   summary,
   periodStart,
   periodEnd,
+  showToolbar = true,
 }: {
   employee: EmployeeRecord
   logs: TimeLogEntry[]
   summary: ReturnType<typeof computeEmployeePayroll>
   periodStart: string
   periodEnd: string
+  showToolbar?: boolean
 }) {
   return (
     <section className="card overflow-hidden dtr-print-area">
-      <div className="no-print flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Daily Time Record</h2>
-          <p className="mt-1 text-sm text-slate-500">{employee.code} - {employee.name}</p>
+      {showToolbar && (
+        <div className="no-print flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Daily Time Record</h2>
+            <p className="mt-1 text-sm text-slate-500">{employee.code} - {employee.name}</p>
+          </div>
+          <button className="btn-secondary w-fit" onClick={printDtr}>
+            <Printer size={16} />
+            Print DTR
+          </button>
         </div>
-        <button className="btn-secondary w-fit" onClick={printDtr}>
-          <Printer size={16} />
-          Print DTR
-        </button>
-      </div>
+      )}
 
       <div className="overflow-x-auto bg-white p-4">
         <div className="mx-auto min-w-[900px] max-w-[1100px] border-2 border-black bg-white font-sans text-[12px] leading-tight text-black">
@@ -1390,6 +1394,8 @@ type PayrollHistoryEntry = {
   summary: PayrollSummary
 }
 
+type HistoryDocument = 'payslip' | 'dtr'
+
 function EmployeeInfoView({
   employees,
   logs,
@@ -1464,6 +1470,7 @@ function EmployeeDetailPage({
     [employee, logs, settings]
   )
   const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+  const [selectedDocument, setSelectedDocument] = useState<HistoryDocument>('payslip')
   const [pdfBusy, setPdfBusy] = useState(false)
   const selectedHistory = history.find((entry) => entry.periodKey === selectedPeriodKey) || history[0]
 
@@ -1475,6 +1482,11 @@ function EmployeeDetailPage({
     } finally {
       setPdfBusy(false)
     }
+  }
+
+  const openHistoryDocument = (periodKey: string, document: HistoryDocument) => {
+    setSelectedPeriodKey(periodKey)
+    setSelectedDocument(document)
   }
 
   return (
@@ -1520,7 +1532,7 @@ function EmployeeDetailPage({
             <span className="badge-neutral">{history.length}</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="min-w-[620px] text-xs">
+            <table className="min-w-[680px] text-xs">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50">
                   <th className="px-3 py-2">Period</th>
@@ -1552,10 +1564,32 @@ function EmployeeDetailPage({
                     <td className="px-3 py-2 text-right font-mono text-rose-700">{formatCurrency(entry.summary.totalDeductions)}</td>
                     <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(entry.summary.netPay)}</td>
                     <td className="px-3 py-2 text-right">
-                      <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setSelectedPeriodKey(entry.periodKey)}>
-                        <FileText size={14} />
-                        Payslip
-                      </button>
+                      <div className="flex justify-end gap-1">
+                        <button
+                          className={`btn-ghost px-2 py-1 text-xs ${
+                            selectedHistory?.periodKey === entry.periodKey && selectedDocument === 'payslip' ? 'bg-slate-100' : ''
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openHistoryDocument(entry.periodKey, 'payslip')
+                          }}
+                        >
+                          <FileText size={14} />
+                          Payslip
+                        </button>
+                        <button
+                          className={`btn-ghost px-2 py-1 text-xs ${
+                            selectedHistory?.periodKey === entry.periodKey && selectedDocument === 'dtr' ? 'bg-slate-100' : ''
+                          }`}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            openHistoryDocument(entry.periodKey, 'dtr')
+                          }}
+                        >
+                          <Clock size={14} />
+                          DTR
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1568,21 +1602,61 @@ function EmployeeDetailPage({
           <div className="space-y-3">
             <div className="no-print flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-semibold">Payslip</h3>
+                <h3 className="text-base font-semibold">{selectedDocument === 'payslip' ? 'Payslip' : 'Daily Time Record'}</h3>
                 <p className="text-sm text-slate-500">{formatPayslipPeriod(selectedHistory.periodStart, selectedHistory.periodEnd)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button className="btn-secondary" onClick={handleExportPayslipPdf} disabled={pdfBusy}>
-                  <Download size={16} />
-                  {pdfBusy ? 'Exporting...' : 'Export PDF'}
-                </button>
-                <button className="btn-secondary" onClick={printPayslip}>
-                  <Printer size={16} />
-                  Print Payslip
-                </button>
+                <div className="inline-flex overflow-hidden rounded-md border border-slate-300 bg-white">
+                  <button
+                    className={`inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium ${
+                      selectedDocument === 'payslip' ? 'bg-primary-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                    onClick={() => setSelectedDocument('payslip')}
+                  >
+                    <FileText size={16} />
+                    Payslip
+                  </button>
+                  <button
+                    className={`inline-flex items-center gap-2 border-l border-slate-300 px-3 py-1.5 text-sm font-medium ${
+                      selectedDocument === 'dtr' ? 'bg-primary-600 text-white' : 'text-slate-700 hover:bg-slate-50'
+                    }`}
+                    onClick={() => setSelectedDocument('dtr')}
+                  >
+                    <Clock size={16} />
+                    DTR
+                  </button>
+                </div>
+                {selectedDocument === 'payslip' ? (
+                  <>
+                    <button className="btn-secondary" onClick={handleExportPayslipPdf} disabled={pdfBusy}>
+                      <Download size={16} />
+                      {pdfBusy ? 'Exporting...' : 'Export PDF'}
+                    </button>
+                    <button className="btn-secondary" onClick={printPayslip}>
+                      <Printer size={16} />
+                      Print Payslip
+                    </button>
+                  </>
+                ) : (
+                  <button className="btn-secondary" onClick={printDtr}>
+                    <Printer size={16} />
+                    Print DTR
+                  </button>
+                )}
               </div>
             </div>
-            <EmployeePayslip entry={selectedHistory} />
+            {selectedDocument === 'payslip' ? (
+              <EmployeePayslip entry={selectedHistory} />
+            ) : (
+              <DtrReport
+                employee={employee}
+                logs={selectedHistory.logs}
+                summary={selectedHistory.summary}
+                periodStart={selectedHistory.periodStart}
+                periodEnd={selectedHistory.periodEnd}
+                showToolbar={false}
+              />
+            )}
           </div>
         )}
       </div>
