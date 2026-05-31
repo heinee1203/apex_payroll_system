@@ -541,6 +541,8 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
                 employees={activeEmployees}
                 logs={selectedLogs}
                 summary={selectedSummary}
+                periodStart={workspace.settings.periodStart}
+                periodEnd={workspace.settings.periodEnd}
                 selectedEmployeeId={selectedEmployee.id}
                 timeLogsDirty={timeLogsDirty}
                 onSelectEmployee={selectTimeLogEmployee}
@@ -637,6 +639,8 @@ function TimeLogsView({
   employees,
   logs,
   summary,
+  periodStart,
+  periodEnd,
   selectedEmployeeId,
   timeLogsDirty,
   onSelectEmployee,
@@ -661,6 +665,8 @@ function TimeLogsView({
   employees: EmployeeRecord[]
   logs: TimeLogEntry[]
   summary: ReturnType<typeof computeEmployeePayroll>
+  periodStart: string
+  periodEnd: string
   selectedEmployeeId: string
   timeLogsDirty: boolean
   onSelectEmployee: (employeeId: string) => void
@@ -681,6 +687,8 @@ function TimeLogsView({
   onApplyPhotoLogs: () => void
   onClearPhotoImport: () => void
 }) {
+  const [showDtrReport, setShowDtrReport] = useState(false)
+
   return (
     <section className="space-y-4">
       <DtrPhotoImportPanel
@@ -717,6 +725,10 @@ function TimeLogsView({
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className={showDtrReport ? 'btn-primary' : 'btn-secondary'} onClick={() => setShowDtrReport((current) => !current)}>
+            <FileText size={16} />
+            {showDtrReport ? 'Hide DTR' : 'Show DTR'}
+          </button>
           <button className={timeLogsDirty ? 'btn-primary' : 'btn-secondary'} onClick={onSaveTimeLogs} disabled={!timeLogsDirty}>
             <Save size={16} />
             Save Time Logs
@@ -742,6 +754,16 @@ function TimeLogsView({
         <Metric label="Late / UT" value={`${formatHours(summary.lateHours)} / ${formatHours(summary.undertimeHours)}`} danger={summary.lateHours + summary.undertimeHours > 0} />
         <Metric label="Net Pay" value={formatCurrency(summary.netPay)} strong />
       </div>
+
+      {showDtrReport && (
+        <DtrReport
+          employee={employee}
+          logs={logs}
+          summary={summary}
+          periodStart={periodStart}
+          periodEnd={periodEnd}
+        />
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
@@ -828,6 +850,122 @@ function TimeLogsView({
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function DtrReport({
+  employee,
+  logs,
+  summary,
+  periodStart,
+  periodEnd,
+}: {
+  employee: EmployeeRecord
+  logs: TimeLogEntry[]
+  summary: ReturnType<typeof computeEmployeePayroll>
+  periodStart: string
+  periodEnd: string
+}) {
+  return (
+    <section className="card overflow-hidden dtr-print-area">
+      <div className="no-print flex flex-col gap-3 border-b border-slate-200 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-base font-semibold">Daily Time Record</h2>
+          <p className="mt-1 text-sm text-slate-500">{employee.code} - {employee.name}</p>
+        </div>
+        <button className="btn-secondary w-fit" onClick={printDtr}>
+          <Printer size={16} />
+          Print DTR
+        </button>
+      </div>
+
+      <div className="overflow-x-auto bg-white p-4">
+        <div className="mx-auto min-w-[900px] max-w-[1100px] border-2 border-black bg-white font-sans text-[12px] leading-tight text-black">
+          <div className="border-b-2 border-black py-3 text-center">
+            <div className="text-xl font-bold">DAILY TIME RECORD</div>
+            <div className="mt-1 text-sm font-semibold">Apex Learning Academy, Inc.</div>
+          </div>
+
+          <div className="grid grid-cols-[110px_1fr_90px_1fr] border-b-2 border-black px-2 py-1">
+            <div className="font-bold">Name:</div>
+            <div className="font-bold">{employee.name}</div>
+            <div className="font-bold">Code:</div>
+            <div>{employee.code}</div>
+            <div className="font-bold">Position:</div>
+            <div>{employee.role}</div>
+            <div className="font-bold">Period:</div>
+            <div>{formatDate(periodStart)} to {formatDate(periodEnd)}</div>
+          </div>
+
+          <table className="w-full border-collapse text-[11px]">
+            <thead>
+              <tr className="border-b-2 border-black">
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">Date</th>
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">Day</th>
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">Status</th>
+                <th colSpan={2} className="border-r border-black px-1 py-1 text-center text-black">AM</th>
+                <th colSpan={2} className="border-r border-black px-1 py-1 text-center text-black">PM</th>
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">Hours</th>
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">Late</th>
+                <th rowSpan={2} className="border-r border-black px-1 py-1 text-center text-black">UT</th>
+                <th rowSpan={2} className="px-1 py-1 text-center text-black">Remarks</th>
+              </tr>
+              <tr className="border-b-2 border-black">
+                <th className="border-r border-black px-1 py-1 text-center text-black">In</th>
+                <th className="border-r border-black px-1 py-1 text-center text-black">Out</th>
+                <th className="border-r border-black px-1 py-1 text-center text-black">In</th>
+                <th className="border-r border-black px-1 py-1 text-center text-black">Out</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => {
+                const day = computeDailyLog(employee, log)
+                const cells = getDtrTimeCells(log)
+                const status = day.absentDay && log.status === 'present'
+                  ? 'Absent'
+                  : STATUS_LABELS[log.status]
+
+                return (
+                  <tr key={log.id} className="border-b border-black">
+                    <td className="border-r border-black px-1 py-1 font-semibold">{formatDateShort(log.date)}</td>
+                    <td className="border-r border-black px-1 py-1 text-center">{getDayName(log.date)}</td>
+                    <td className="border-r border-black px-1 py-1">{status}</td>
+                    <td className="border-r border-black px-1 py-1 text-center font-mono">{cells.amIn}</td>
+                    <td className="border-r border-black px-1 py-1 text-center font-mono">{cells.amOut}</td>
+                    <td className="border-r border-black px-1 py-1 text-center font-mono">{cells.pmIn}</td>
+                    <td className="border-r border-black px-1 py-1 text-center font-mono">{cells.pmOut}</td>
+                    <td className="border-r border-black px-1 py-1 text-right font-mono">{formatHours(day.regularHours)}</td>
+                    <td className="border-r border-black px-1 py-1 text-right font-mono">{day.lateHours ? formatHours(day.lateHours) : '-'}</td>
+                    <td className="border-r border-black px-1 py-1 text-right font-mono">{day.undertimeHours ? formatHours(day.undertimeHours) : '-'}</td>
+                    <td className="px-1 py-1">{log.notes || (day.absentDay ? 'No time log' : '')}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+
+          <div className="grid grid-cols-4 border-t-2 border-black text-[12px]">
+            <div className="border-r border-black px-2 py-2">
+              <span className="font-bold">Paid Days:</span> {summary.paidDays}
+            </div>
+            <div className="border-r border-black px-2 py-2">
+              <span className="font-bold">Absences:</span> {summary.absences}
+            </div>
+            <div className="border-r border-black px-2 py-2">
+              <span className="font-bold">Late / UT:</span> {formatHours(summary.lateHours)} / {formatHours(summary.undertimeHours)}
+            </div>
+            <div className="px-2 py-2">
+              <span className="font-bold">Net Pay:</span> {formatCurrency(summary.netPay)}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-12 px-8 py-8 text-center text-[12px]">
+            <div className="border-t border-black pt-1">Employee Signature</div>
+            <div className="border-t border-black pt-1">Checked By</div>
+          </div>
         </div>
       </div>
     </section>
@@ -1691,6 +1829,33 @@ function rowTone(status: TimeLogStatus, incomplete: boolean, absentDay = false) 
   return 'bg-white'
 }
 
+function getDtrTimeCells(log: TimeLogEntry) {
+  const empty = { amIn: '-', amOut: '-', pmIn: '-', pmOut: '-' }
+  if (log.status !== 'present' || !log.timeIn || !log.timeOut) return empty
+
+  const timeIn = clockMinutes(log.timeIn)
+  const timeOut = clockMinutes(log.timeOut)
+  if (timeIn === null || timeOut === null || timeOut <= timeIn) return empty
+
+  const noon = 12 * 60
+  const afternoonStart = 13 * 60
+  const spansMorning = timeIn < noon
+  const spansAfternoon = timeOut > afternoonStart
+
+  return {
+    amIn: spansMorning ? formatTimeDisplay(log.timeIn) : '-',
+    amOut: spansMorning ? formatTimeDisplay(timeOut <= afternoonStart ? log.timeOut : '12:00') : '-',
+    pmIn: spansAfternoon ? formatTimeDisplay(timeIn >= afternoonStart ? log.timeIn : '13:00') : '-',
+    pmOut: spansAfternoon ? formatTimeDisplay(log.timeOut) : '-',
+  }
+}
+
+function clockMinutes(time: string): number | null {
+  const [hours, minutes] = time.split(':').map(Number)
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null
+  return hours * 60 + minutes
+}
+
 function buildEmployeePayrollHistory(
   employee: EmployeeRecord,
   logs: TimeLogEntry[],
@@ -1849,6 +2014,15 @@ function printPayslip() {
   const cleanup = () => document.body.classList.remove('printing-payslip')
 
   document.body.classList.add('printing-payslip')
+  window.addEventListener('afterprint', cleanup, { once: true })
+  window.print()
+  window.setTimeout(cleanup, 500)
+}
+
+function printDtr() {
+  const cleanup = () => document.body.classList.remove('printing-dtr')
+
+  document.body.classList.add('printing-dtr')
   window.addEventListener('afterprint', cleanup, { once: true })
   window.print()
   window.setTimeout(cleanup, 500)

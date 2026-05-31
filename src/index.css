@@ -154,6 +154,32 @@
     min-width: 0 !important;
   }
 
+  body.printing-dtr * {
+    visibility: hidden !important;
+  }
+
+  body.printing-dtr .dtr-print-area,
+  body.printing-dtr .dtr-print-area * {
+    visibility: visible !important;
+  }
+
+  body.printing-dtr .dtr-print-area {
+    border: 0 !important;
+    box-shadow: none !important;
+    left: 0;
+    overflow: visible !important;
+    padding: 0 !important;
+    page: dtr;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+  body.printing-dtr .dtr-print-area > div {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
   @page {
     size: A5;
     margin: 10mm;
@@ -162,5 +188,10 @@
   @page payslip {
     size: landscape;
     margin: 10mm;
+  }
+
+  @page dtr {
+    size: landscape;
+    margin: 8mm;
   }
 }
