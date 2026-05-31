@@ -114,6 +114,10 @@
     font-family: Arial, Helvetica, sans-serif;
   }
 
+  .payslip-amount {
+    @apply text-right tabular-nums whitespace-nowrap;
+  }
+
   .payslip-blue {
     color: #0057d8;
   }

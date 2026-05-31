@@ -1695,24 +1695,24 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
               </div>
               <div className="grid min-h-[250px] grid-cols-[1fr_140px] content-start gap-y-2 px-1 py-1">
                 <div>BASIC SALARY</div>
-                <div className="text-right">{formatPayslipMoney(summary.grossPay, false)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.grossPay, false)}</div>
                 {summary.overtimePay > 0 && (
                   <>
                     <div>OVERTIME PAY</div>
-                    <div className="text-right">{formatPayslipMoney(summary.overtimePay)}</div>
+                    <div className="payslip-amount">{formatPayslipMoney(summary.overtimePay)}</div>
                   </>
                 )}
                 <div className="col-span-2">LESS: Contributions and Wtax</div>
                 <div className="pl-12">SSS</div>
-                <div className="text-right">{formatPayslipMoney(summary.sss)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.sss)}</div>
                 <div className="pl-12">PHILHEALTH</div>
-                <div className="text-right">{formatPayslipMoney(summary.philHealth)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.philHealth)}</div>
                 <div className="pl-12">PAG IBIG</div>
-                <div className="text-right">{formatPayslipMoney(summary.pagIbig)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.pagIbig)}</div>
                 <div className="mt-12">Total Contributions</div>
-                <div className="mt-12 text-right">{formatPayslipMoney(contributions)}</div>
+                <div className="payslip-amount mt-12">{formatPayslipMoney(contributions)}</div>
                 <div>NET SALARY</div>
-                <div className="text-right">{formatPayslipMoney(netSalary, false)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(netSalary, false)}</div>
               </div>
             </div>
 
@@ -1723,19 +1723,19 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
               </div>
               <div className="grid min-h-[290px] grid-cols-[1fr_190px] content-start gap-y-2 px-1 py-1">
                 <div>ABSENCES</div>
-                <div className="text-right">{formatPayslipMoney(summary.absenceDeduction)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.absenceDeduction)}</div>
                 {summary.lateDeduction > 0 && (
                   <>
                     <div>LATE ( {formatPayslipHours(summary.lateHours)} HRS )</div>
-                    <div className="text-right">{formatPayslipMoney(summary.lateDeduction)}</div>
+                    <div className="payslip-amount">{formatPayslipMoney(summary.lateDeduction)}</div>
                   </>
                 )}
                 <div>UNDER TIME ( {formatPayslipHours(summary.undertimeHours)} HRS )</div>
-                <div className="text-right">{formatPayslipMoney(summary.undertimeDeduction)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.undertimeDeduction)}</div>
                 <div>HDMF LOAN</div>
-                <div className="text-right">{formatPayslipMoney(summary.loanDeduction)}</div>
+                <div className="payslip-amount">{formatPayslipMoney(summary.loanDeduction)}</div>
                 <div>SSS LOAN</div>
-                <div className="text-right">-</div>
+                <div className="payslip-amount">-</div>
               </div>
             </div>
           </div>
@@ -1743,24 +1743,24 @@ function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
           <div className="grid grid-cols-2 border-b-2 border-black">
             <div className="grid grid-cols-[1fr_140px] border-r-2 border-black px-1 py-2">
               <div>NET SALARY</div>
-              <div className="text-right">{formatPayslipMoney(netSalary, false)}</div>
+              <div className="payslip-amount">{formatPayslipMoney(netSalary, false)}</div>
               <div>Total Loans &amp; Other Deductions</div>
-              <div className="text-right">{otherDeductions ? `(${formatPayslipMoney(otherDeductions)})` : '-'}</div>
+              <div className="payslip-amount">{otherDeductions ? `(${formatPayslipMoney(otherDeductions)})` : '-'}</div>
               <div>Adjust</div>
-              <div className="text-right">{formatPayslipMoney(summary.adjustment)}</div>
+              <div className="payslip-amount">{formatPayslipMoney(summary.adjustment)}</div>
             </div>
             <div className="grid grid-cols-[1fr_190px] content-between">
-              <div className="grid grid-cols-[1fr_190px] border-b-2 border-black font-bold">
+              <div className="col-span-2 grid grid-cols-[1fr_190px] border-b-2 border-black font-bold">
                 <div className="border-r-2 border-black px-1 py-2">Total Loans &amp; Other Deductions</div>
-                <div className="px-1 py-2 text-right">{formatPayslipMoney(otherDeductions)}</div>
+                <div className="payslip-amount px-1 py-2">{formatPayslipMoney(otherDeductions)}</div>
               </div>
-              <div className="px-1 py-2">* For Internal Use Only</div>
+              <div className="col-span-2 px-1 py-2">* For Internal Use Only</div>
             </div>
           </div>
 
           <div className="grid grid-cols-[1fr_140px] border-b-2 border-black px-1 py-1 font-bold">
             <div>NET PAY FOR THE PERIOD</div>
-            <div className="text-right">{formatPayslipMoney(netPay, false)}</div>
+            <div className="payslip-amount">{formatPayslipMoney(netPay, false)}</div>
           </div>
           <div className="px-1 py-1">
             Note: Your net salary is the amount you receive after deducting the required contributions from your total
