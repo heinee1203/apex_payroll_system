@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
 import {
   AlertTriangle,
+  ArrowLeft,
   Calculator,
   CalendarDays,
   CheckCircle2,
   Clock,
   Download,
+  Eye,
+  FileText,
   Plus,
   Printer,
   RefreshCcw,
@@ -28,6 +31,8 @@ import {
   normalizeStatus,
   STATUS_LABELS,
   type EmployeeRecord,
+  type PayrollSettings,
+  type PayrollSummary,
   type TimeLogEntry,
   type TimeLogStatus,
   type WorkspaceState,
@@ -490,6 +495,8 @@ export function PayrollWorkspace() {
             {view === 'employees' && (
               <EmployeesView
                 employees={workspace.employees}
+                logs={workspace.logs}
+                settings={workspace.settings}
                 onAdd={addEmployee}
                 onRemove={removeEmployee}
                 onUpdate={updateEmployee}
@@ -932,21 +939,39 @@ function PayrollView({
 
 function EmployeesView({
   employees,
+  logs,
+  settings,
   onAdd,
   onRemove,
   onUpdate,
 }: {
   employees: EmployeeRecord[]
+  logs: TimeLogEntry[]
+  settings: PayrollSettings
   onAdd: () => void
   onRemove: (employeeId: string) => void
   onUpdate: (employeeId: string, patch: Partial<EmployeeRecord>) => void
 }) {
   const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active')
+  const [selectedEmployeePageId, setSelectedEmployeePageId] = useState('')
   const activeCount = employees.filter((employee) => employee.active).length
   const inactiveCount = employees.length - activeCount
   const visibleEmployees = employees.filter((employee) =>
     statusFilter === 'active' ? employee.active : !employee.active
   )
+  const selectedEmployeePage = employees.find((employee) => employee.id === selectedEmployeePageId)
+
+  if (selectedEmployeePage) {
+    return (
+      <EmployeeDetailPage
+        employee={selectedEmployeePage}
+        logs={logs}
+        settings={settings}
+        onBack={() => setSelectedEmployeePageId('')}
+        onUpdate={(patch) => onUpdate(selectedEmployeePage.id, patch)}
+      />
+    )
+  }
 
   return (
     <section className="space-y-4">
@@ -1108,9 +1133,14 @@ function EmployeesView({
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <button className="btn-ghost p-1 text-rose-700" onClick={() => onRemove(employee.id)} title="Remove employee">
-                      <Trash2 size={16} />
-                    </button>
+                    <div className="flex justify-end gap-1">
+                      <button className="btn-ghost p-1 text-cyan-700" onClick={() => setSelectedEmployeePageId(employee.id)} title="Open employee page">
+                        <Eye size={16} />
+                      </button>
+                      <button className="btn-ghost p-1 text-rose-700" onClick={() => onRemove(employee.id)} title="Remove employee">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1119,6 +1149,247 @@ function EmployeesView({
         </div>
       </div>
     </section>
+  )
+}
+
+type PayrollHistoryEntry = {
+  periodKey: string
+  periodStart: string
+  periodEnd: string
+  logs: TimeLogEntry[]
+  summary: PayrollSummary
+}
+
+function EmployeeDetailPage({
+  employee,
+  logs,
+  settings,
+  onBack,
+  onUpdate,
+}: {
+  employee: EmployeeRecord
+  logs: TimeLogEntry[]
+  settings: PayrollSettings
+  onBack: () => void
+  onUpdate: (patch: Partial<EmployeeRecord>) => void
+}) {
+  const history = useMemo(
+    () => buildEmployeePayrollHistory(employee, logs, settings),
+    [employee, logs, settings]
+  )
+  const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
+  const selectedHistory = history.find((entry) => entry.periodKey === selectedPeriodKey) || history[0]
+
+  return (
+    <section className="space-y-4">
+      <div className="no-print flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button className="btn-secondary w-fit" onClick={onBack}>
+            <ArrowLeft size={16} />
+            Employees
+          </button>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold">{employee.name}</h2>
+              <span className={employee.active ? 'badge-success' : 'badge-neutral'}>
+                {employee.active ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+            <p className="mt-1 text-sm text-slate-500">{employee.code} | {employee.role} | {employee.payType}</p>
+          </div>
+        </div>
+        <label className="flex w-fit items-center gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
+          Active employee
+          <Toggle checked={employee.active} onChange={(checked) => onUpdate({ active: checked })} />
+        </label>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <Metric label="Basic Pay" value={formatCurrency(employee.basicPay)} />
+        <Metric label="Periods" value={String(history.length)} />
+        <Metric label="Latest Net Pay" value={selectedHistory ? formatCurrency(selectedHistory.summary.netPay) : formatCurrency(0)} strong />
+        <Metric label="Latest Deductions" value={selectedHistory ? formatCurrency(selectedHistory.summary.totalDeductions) : formatCurrency(0)} danger />
+      </div>
+
+      <div className="grid gap-4 2xl:grid-cols-[420px_1fr]">
+        <div className="card overflow-hidden">
+          <div className="card-header flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <FileText size={18} className="text-slate-500" />
+              <h3 className="text-base font-semibold">Payroll History</h3>
+            </div>
+            <span className="badge-neutral">{history.length}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-[620px] text-xs">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  <th className="px-3 py-2">Period</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2 text-right">Gross</th>
+                  <th className="px-3 py-2 text-right">Deduct</th>
+                  <th className="px-3 py-2 text-right">Net</th>
+                  <th className="px-3 py-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-10 text-center text-sm text-slate-500">
+                      No payroll history yet
+                    </td>
+                  </tr>
+                ) : history.map((entry) => (
+                  <tr
+                    key={entry.periodKey}
+                    className={`cursor-pointer border-b border-slate-100 hover:bg-slate-50 ${
+                      selectedHistory?.periodKey === entry.periodKey ? 'bg-cyan-50' : ''
+                    }`}
+                    onClick={() => setSelectedPeriodKey(entry.periodKey)}
+                  >
+                    <td className="px-3 py-2 font-medium">{formatDateShort(entry.periodStart)} - {formatDateShort(entry.periodEnd)}</td>
+                    <td className="px-3 py-2">{getPayslipType(entry.periodEnd)}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatCurrency(entry.summary.grossPay + entry.summary.overtimePay)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-rose-700">{formatCurrency(entry.summary.totalDeductions)}</td>
+                    <td className="px-3 py-2 text-right font-mono font-semibold">{formatCurrency(entry.summary.netPay)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button className="btn-ghost px-2 py-1 text-xs" onClick={() => setSelectedPeriodKey(entry.periodKey)}>
+                        <FileText size={14} />
+                        Payslip
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {selectedHistory && (
+          <div className="space-y-3">
+            <div className="no-print flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">Payslip</h3>
+                <p className="text-sm text-slate-500">{formatPayslipPeriod(selectedHistory.periodStart, selectedHistory.periodEnd)}</p>
+              </div>
+              <button className="btn-secondary" onClick={printPayslip}>
+                <Printer size={16} />
+                Print Payslip
+              </button>
+            </div>
+            <EmployeePayslip entry={selectedHistory} />
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function EmployeePayslip({ entry }: { entry: PayrollHistoryEntry }) {
+  const { summary } = entry
+  const contributions = summary.sss + summary.philHealth + summary.pagIbig
+  const netSalary = summary.grossPay + summary.overtimePay - contributions
+  const otherDeductions = summary.lateDeduction + summary.undertimeDeduction + summary.absenceDeduction + summary.loanDeduction
+  const netPay = netSalary - otherDeductions + summary.adjustment
+
+  return (
+    <div className="overflow-x-auto rounded-md bg-white p-4 shadow-sm payslip-print-area">
+      <div className="mx-auto min-w-[820px] max-w-[960px] bg-white text-black">
+        <div className="border-2 border-black font-sans text-[13px] leading-tight">
+          <div className="border-b-2 border-black py-3 text-center text-2xl font-bold">PAYSLIP</div>
+          <div className="grid grid-cols-[90px_1.1fr_90px_1.1fr_70px_120px] px-1 py-1">
+            <div className="font-bold">DATE:</div>
+            <div className="font-bold text-blue-700">{formatPayslipDate(entry.periodEnd)}</div>
+            <div className="font-bold">PERIOD :</div>
+            <div className="font-bold text-blue-700">{formatPayslipPeriod(entry.periodStart, entry.periodEnd)}</div>
+            <div className="font-bold">TYPE:</div>
+            <div className="font-bold text-blue-700">{getPayslipType(entry.periodEnd)}</div>
+            <div className="font-bold">NAME:</div>
+            <div className="col-span-5 font-bold text-blue-700">{summary.employee.name}</div>
+          </div>
+
+          <div className="grid grid-cols-2 border-y-2 border-black">
+            <div className="border-r-2 border-black">
+              <div className="grid grid-cols-[1fr_140px] border-b-2 border-black font-bold">
+                <div className="px-1 py-1">EARNINGS</div>
+                <div className="px-1 py-1">AMOUNT:</div>
+              </div>
+              <div className="grid min-h-[250px] grid-cols-[1fr_140px] content-start gap-y-2 px-1 py-1">
+                <div>BASIC SALARY</div>
+                <div className="text-right">{formatPayslipMoney(summary.grossPay, false)}</div>
+                {summary.overtimePay > 0 && (
+                  <>
+                    <div>OVERTIME PAY</div>
+                    <div className="text-right">{formatPayslipMoney(summary.overtimePay)}</div>
+                  </>
+                )}
+                <div className="col-span-2">LESS: Contributions and Wtax</div>
+                <div className="pl-12">SSS</div>
+                <div className="text-right">{formatPayslipMoney(summary.sss)}</div>
+                <div className="pl-12">PHILHEALTH</div>
+                <div className="text-right">{formatPayslipMoney(summary.philHealth)}</div>
+                <div className="pl-12">PAG IBIG</div>
+                <div className="text-right">{formatPayslipMoney(summary.pagIbig)}</div>
+                <div className="mt-12">Total Contributions</div>
+                <div className="mt-12 text-right">{formatPayslipMoney(contributions)}</div>
+                <div>NET SALARY</div>
+                <div className="text-right">{formatPayslipMoney(netSalary, false)}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="grid grid-cols-[1fr_190px] border-b-2 border-black font-bold">
+                <div className="border-r-2 border-black px-1 py-1">Loans &amp; Other Deductions:</div>
+                <div className="px-1 py-1">AMOUNT:</div>
+              </div>
+              <div className="grid min-h-[290px] grid-cols-[1fr_190px] content-start gap-y-2 px-1 py-1">
+                <div>ABSENCES</div>
+                <div className="text-right">{formatPayslipMoney(summary.absenceDeduction)}</div>
+                {summary.lateDeduction > 0 && (
+                  <>
+                    <div>LATE ( {formatPayslipHours(summary.lateHours)} HRS )</div>
+                    <div className="text-right">{formatPayslipMoney(summary.lateDeduction)}</div>
+                  </>
+                )}
+                <div>UNDER TIME ( {formatPayslipHours(summary.undertimeHours)} HRS )</div>
+                <div className="text-right">{formatPayslipMoney(summary.undertimeDeduction)}</div>
+                <div>HDMF LOAN</div>
+                <div className="text-right">{formatPayslipMoney(summary.loanDeduction)}</div>
+                <div>SSS LOAN</div>
+                <div className="text-right">-</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 border-b-2 border-black">
+            <div className="grid grid-cols-[1fr_140px] border-r-2 border-black px-1 py-2">
+              <div>NET SALARY</div>
+              <div className="text-right">{formatPayslipMoney(netSalary, false)}</div>
+              <div>Total Loans &amp; Other Deductions</div>
+              <div className="text-right">{otherDeductions ? `(${formatPayslipMoney(otherDeductions)})` : '-'}</div>
+              <div>Adjust</div>
+              <div className="text-right">{formatPayslipMoney(summary.adjustment)}</div>
+            </div>
+            <div className="grid grid-cols-[1fr_190px] content-between">
+              <div className="grid grid-cols-[1fr_190px] border-b-2 border-black font-bold">
+                <div className="border-r-2 border-black px-1 py-2">Total Loans &amp; Other Deductions</div>
+                <div className="px-1 py-2 text-right">{formatPayslipMoney(otherDeductions)}</div>
+              </div>
+              <div className="px-1 py-2">* For Internal Use Only</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-[1fr_140px] border-b-2 border-black px-1 py-1 font-bold">
+            <div>NET PAY FOR THE PERIOD</div>
+            <div className="text-right">{formatPayslipMoney(netPay, false)}</div>
+          </div>
+          <div className="px-1 py-1">
+            Note: Your net salary is the amount you receive after deducting the required contributions from your total
+            earnings for the previous month.
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -1250,6 +1521,118 @@ function rowTone(status: TimeLogStatus, incomplete: boolean) {
   if (status === 'holiday' || status === 'paid_leave') return 'bg-emerald-50'
   if (status === 'rest_day') return 'bg-slate-50 text-slate-500'
   return 'bg-white'
+}
+
+function buildEmployeePayrollHistory(
+  employee: EmployeeRecord,
+  logs: TimeLogEntry[],
+  settings: PayrollSettings
+): PayrollHistoryEntry[] {
+  const employeeLogs = logs.filter((log) => log.employeeId === employee.id)
+  const groups = new Map<string, { periodStart: string; periodEnd: string; logs: TimeLogEntry[] }>()
+
+  const addGroup = (periodStart: string, periodEnd: string, groupLogs: TimeLogEntry[]) => {
+    const periodKey = `${periodStart}|${periodEnd}`
+    const existing = groups.get(periodKey)
+    if (existing) {
+      existing.logs.push(...groupLogs)
+      return
+    }
+    groups.set(periodKey, { periodStart, periodEnd, logs: [...groupLogs] })
+  }
+
+  const currentPeriodLogs = employeeLogs.filter((log) =>
+    log.date >= settings.periodStart && log.date <= settings.periodEnd
+  )
+  if (employee.active || currentPeriodLogs.length > 0) {
+    addGroup(settings.periodStart, settings.periodEnd, currentPeriodLogs)
+  }
+
+  for (const log of employeeLogs) {
+    if (log.date >= settings.periodStart && log.date <= settings.periodEnd) continue
+    const period = getSemiMonthlyPeriodForDate(log.date)
+    addGroup(period.periodStart, period.periodEnd, [log])
+  }
+
+  return Array.from(groups.entries())
+    .map(([periodKey, group]) => ({
+      periodKey,
+      periodStart: group.periodStart,
+      periodEnd: group.periodEnd,
+      logs: group.logs.sort((a, b) => a.date.localeCompare(b.date)),
+      summary: computeEmployeePayroll(
+        employee,
+        group.logs,
+        { ...settings, periodStart: group.periodStart, periodEnd: group.periodEnd },
+        DEFAULT_SSS_BRACKETS
+      ),
+    }))
+    .sort((a, b) => b.periodStart.localeCompare(a.periodStart))
+}
+
+function getSemiMonthlyPeriodForDate(dateKey: string) {
+  const date = parseDateKey(dateKey)
+  const year = date.getFullYear()
+  const month = date.getMonth()
+  const day = date.getDate()
+  const startDay = day <= 15 ? 1 : 16
+  const endDay = day <= 15 ? 15 : new Date(year, month + 1, 0).getDate()
+
+  return {
+    periodStart: [
+      year,
+      String(month + 1).padStart(2, '0'),
+      String(startDay).padStart(2, '0'),
+    ].join('-'),
+    periodEnd: [
+      year,
+      String(month + 1).padStart(2, '0'),
+      String(endDay).padStart(2, '0'),
+    ].join('-'),
+  }
+}
+
+function getPayslipType(periodEnd: string): string {
+  return parseDateKey(periodEnd).getDate() <= 15 ? '15TH' : '30TH'
+}
+
+function formatPayslipDate(dateKey: string): string {
+  const date = parseDateKey(dateKey)
+  return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
+}
+
+function formatPayslipPeriod(periodStart: string, periodEnd: string): string {
+  const start = parseDateKey(periodStart)
+  const end = parseDateKey(periodEnd)
+  const startMonth = start.toLocaleDateString('en-PH', { month: 'long' }).toUpperCase()
+  const endMonth = end.toLocaleDateString('en-PH', { month: 'long' }).toUpperCase()
+
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return `${startMonth} ${start.getDate()} TO ${end.getDate()}, ${end.getFullYear()}`
+  }
+
+  return `${startMonth} ${start.getDate()}, ${start.getFullYear()} TO ${endMonth} ${end.getDate()}, ${end.getFullYear()}`
+}
+
+function formatPayslipMoney(amount: number, dashForZero = true): string {
+  if (dashForZero && Math.abs(amount) < 0.005) return '-'
+  return new Intl.NumberFormat('en-PH', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount)
+}
+
+function formatPayslipHours(hours: number): string {
+  return Number.isInteger(hours) ? String(hours) : hours.toFixed(2)
+}
+
+function printPayslip() {
+  const cleanup = () => document.body.classList.remove('printing-payslip')
+
+  document.body.classList.add('printing-payslip')
+  window.addEventListener('afterprint', cleanup, { once: true })
+  window.print()
+  window.setTimeout(cleanup, 500)
 }
 
 function importTextIntoWorkspace(

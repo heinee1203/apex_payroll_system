@@ -121,8 +121,38 @@
     display: none !important;
   }
 
+  body.printing-payslip * {
+    visibility: hidden !important;
+  }
+
+  body.printing-payslip .payslip-print-area,
+  body.printing-payslip .payslip-print-area * {
+    visibility: visible !important;
+  }
+
+  body.printing-payslip .payslip-print-area {
+    box-shadow: none !important;
+    left: 0;
+    overflow: visible !important;
+    padding: 0 !important;
+    page: payslip;
+    position: absolute;
+    top: 0;
+    width: 100%;
+  }
+
+  body.printing-payslip .payslip-print-area > div {
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
   @page {
     size: A5;
+    margin: 10mm;
+  }
+
+  @page payslip {
+    size: landscape;
     margin: 10mm;
   }
 }
