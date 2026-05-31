@@ -1411,7 +1411,21 @@ function EmployeeInfoView({
   onSelectEmployee: (employeeId: string) => void
   onUpdateEmployee: (employeeId: string, patch: Partial<EmployeeRecord>) => void
 }) {
-  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) || employees[0]
+  const [employeeStatusFilter, setEmployeeStatusFilter] = useState<'active' | 'inactive'>(() => {
+    const selected = employees.find((employee) => employee.id === selectedEmployeeId)
+    return selected && !selected.active ? 'inactive' : 'active'
+  })
+  const activeEmployees = useMemo(() => employees.filter((employee) => employee.active), [employees])
+  const inactiveEmployees = useMemo(() => employees.filter((employee) => !employee.active), [employees])
+  const filteredEmployees = employeeStatusFilter === 'active' ? activeEmployees : inactiveEmployees
+  const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId) || filteredEmployees[0] || employees[0]
+  const selectedEmployeeVisible = filteredEmployees.some((employee) => employee.id === selectedEmployee?.id)
+
+  const changeEmployeeStatusFilter = (nextFilter: 'active' | 'inactive') => {
+    setEmployeeStatusFilter(nextFilter)
+    const nextEmployee = nextFilter === 'active' ? activeEmployees[0] : inactiveEmployees[0]
+    if (nextEmployee) onSelectEmployee(nextEmployee.id)
+  }
 
   if (!selectedEmployee) {
     return (
@@ -1429,24 +1443,58 @@ function EmployeeInfoView({
           <h2 className="text-xl font-bold">Employee Info</h2>
           <p className="mt-1 text-sm text-slate-500">Payroll history, payslips, and employee summary</p>
         </div>
-        <select
-          value={selectedEmployee.id}
-          onChange={(event) => onSelectEmployee(event.target.value)}
-          className="select max-w-md"
-        >
-          {employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.code} - {employee.name}{employee.active ? '' : ' (Inactive)'}
-            </option>
-          ))}
-        </select>
+        <div className="flex flex-col gap-2 sm:min-w-[520px]">
+          <div className="inline-flex w-fit rounded-md border border-slate-300 bg-white p-1 shadow-sm">
+            {[
+              { id: 'active' as const, label: 'Active', count: activeEmployees.length },
+              { id: 'inactive' as const, label: 'Inactive', count: inactiveEmployees.length },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={employeeStatusFilter === option.id}
+                onClick={() => changeEmployeeStatusFilter(option.id)}
+                className={`rounded px-3 py-1.5 text-sm font-semibold transition-colors ${
+                  employeeStatusFilter === option.id
+                    ? 'bg-cyan-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {option.label}
+                <span className={`ml-2 font-mono text-xs ${employeeStatusFilter === option.id ? 'text-cyan-50' : 'text-slate-400'}`}>
+                  {option.count}
+                </span>
+              </button>
+            ))}
+          </div>
+          <select
+            value={selectedEmployeeVisible ? selectedEmployee.id : ''}
+            onChange={(event) => onSelectEmployee(event.target.value)}
+            className="select"
+            disabled={!filteredEmployees.length}
+          >
+            {!filteredEmployees.length && (
+              <option value="">No {employeeStatusFilter} employees</option>
+            )}
+            {filteredEmployees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.code} - {employee.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <EmployeeDetailPage
         employee={selectedEmployee}
         logs={logs}
         settings={settings}
-        onUpdate={(patch) => onUpdateEmployee(selectedEmployee.id, patch)}
+        onUpdate={(patch) => {
+          if (typeof patch.active === 'boolean') {
+            setEmployeeStatusFilter(patch.active ? 'active' : 'inactive')
+          }
+          onUpdateEmployee(selectedEmployee.id, patch)
+        }}
       />
     </section>
   )
