@@ -1040,27 +1040,30 @@ function EmployeesView({
               ) : visibleEmployees.map((employee) => (
                 <tr
                   key={employee.id}
-                  className={`border-b border-slate-100 ${employee.active ? '' : 'bg-slate-50 text-slate-500'}`}
+                  className={`border-b border-slate-100 ${employee.active ? '' : 'bg-slate-100 text-slate-400 opacity-75'}`}
                 >
                   <td className="px-3 py-2">
                     <input
                       value={employee.code}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { code: event.target.value })}
-                      className="input w-28 py-1 font-mono text-xs"
+                      className={`input w-28 py-1 font-mono text-xs ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2">
                     <input
                       value={employee.name}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { name: event.target.value })}
-                      className="input min-w-56 py-1"
+                      className={`input min-w-56 py-1 ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2">
                     <input
                       value={employee.role}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { role: event.target.value })}
-                      className="input min-w-32 py-1"
+                      className={`input min-w-32 py-1 ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2 text-center">
@@ -1069,8 +1072,9 @@ function EmployeesView({
                   <td className="px-3 py-2">
                     <select
                       value={employee.payType}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { payType: event.target.value as EmployeeRecord['payType'] })}
-                      className="select w-28 py-1"
+                      className={`select w-28 py-1 ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     >
                       <option value="monthly">Monthly</option>
                       <option value="daily">Daily</option>
@@ -1082,8 +1086,9 @@ function EmployeesView({
                       min={0}
                       step="0.01"
                       value={employee.basicPay}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { basicPay: numberFromInput(event.target.value) })}
-                      className="input w-32 py-1 text-right"
+                      className={`input w-32 py-1 text-right ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -1091,28 +1096,30 @@ function EmployeesView({
                       <input
                         type="time"
                         value={employee.schedule.start}
+                        disabled={!employee.active}
                         onChange={(event) => onUpdate(employee.id, { schedule: { ...employee.schedule, start: event.target.value } })}
-                        className="input w-28 py-1"
+                        className={`input w-28 py-1 ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                       />
                       <input
                         type="time"
                         value={employee.schedule.end}
+                        disabled={!employee.active}
                         onChange={(event) => onUpdate(employee.id, { schedule: { ...employee.schedule, end: event.target.value } })}
-                        className="input w-28 py-1"
+                        className={`input w-28 py-1 ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                       />
                     </div>
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <Toggle checked={employee.saturdayPaid} onChange={(checked) => onUpdate(employee.id, { saturdayPaid: checked })} />
+                    <Toggle checked={employee.saturdayPaid} disabled={!employee.active} onChange={(checked) => onUpdate(employee.id, { saturdayPaid: checked })} />
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <Toggle checked={employee.sssEnabled} onChange={(checked) => onUpdate(employee.id, { sssEnabled: checked })} />
+                    <Toggle checked={employee.sssEnabled} disabled={!employee.active} onChange={(checked) => onUpdate(employee.id, { sssEnabled: checked })} />
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <Toggle checked={employee.philHealthEnabled} onChange={(checked) => onUpdate(employee.id, { philHealthEnabled: checked })} />
+                    <Toggle checked={employee.philHealthEnabled} disabled={!employee.active} onChange={(checked) => onUpdate(employee.id, { philHealthEnabled: checked })} />
                   </td>
                   <td className="px-3 py-2 text-center">
-                    <Toggle checked={employee.pagIbigEnabled} onChange={(checked) => onUpdate(employee.id, { pagIbigEnabled: checked })} />
+                    <Toggle checked={employee.pagIbigEnabled} disabled={!employee.active} onChange={(checked) => onUpdate(employee.id, { pagIbigEnabled: checked })} />
                   </td>
                   <td className="px-3 py-2">
                     <input
@@ -1120,8 +1127,9 @@ function EmployeesView({
                       min={0}
                       step="0.01"
                       value={employee.loanDeduction}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { loanDeduction: numberFromInput(event.target.value) })}
-                      className="input w-28 py-1 text-right"
+                      className={`input w-28 py-1 text-right ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -1129,8 +1137,9 @@ function EmployeesView({
                       type="number"
                       step="0.01"
                       value={employee.adjustment}
+                      disabled={!employee.active}
                       onChange={(event) => onUpdate(employee.id, { adjustment: numberFromInput(event.target.value) })}
-                      className="input w-28 py-1 text-right"
+                      className={`input w-28 py-1 text-right ${employee.active ? '' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 shadow-none'}`}
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -1504,12 +1513,13 @@ function SwitchRow({ label, checked, onChange }: { label: string; checked: boole
   )
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: boolean) => void }) {
+function Toggle({ checked, disabled = false, onChange }: { checked: boolean; disabled?: boolean; onChange: (checked: boolean) => void }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`h-5 w-9 rounded-full p-0.5 transition-colors ${checked ? 'bg-cyan-600' : 'bg-slate-300'}`}
+      className={`h-5 w-9 rounded-full p-0.5 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${checked ? 'bg-cyan-600' : 'bg-slate-300'}`}
     >
       <span className={`block h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : ''}`} />
     </button>
