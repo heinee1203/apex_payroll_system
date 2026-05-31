@@ -8,6 +8,7 @@ import {
   Clock,
   Download,
   FileText,
+  LogOut,
   Plus,
   Printer,
   RefreshCcw,
@@ -51,7 +52,7 @@ const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Clock }> 
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
-export function PayrollWorkspace() {
+export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => loadWorkspace())
   const [view, setView] = useState<WorkspaceView>('logs')
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
@@ -486,6 +487,18 @@ export function PayrollWorkspace() {
               </button>
             ))}
           </nav>
+          {onLogout && (
+            <div className="border-t border-slate-800 px-2 py-2">
+              <button
+                type="button"
+                onClick={onLogout}
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-800 hover:text-white"
+              >
+                <LogOut size={18} />
+                Sign Out
+              </button>
+            </div>
+          )}
           <div className="hidden border-t border-slate-800 px-4 py-3 text-xs text-slate-500 lg:block">
             Local workspace
           </div>
