@@ -168,6 +168,10 @@ function isSaturday(dateKey: string): boolean {
   return parseDateKey(dateKey).getDay() === 6
 }
 
+function isFirstHalfPayroll(periodEnd: string): boolean {
+  return parseDateKey(periodEnd).getDate() <= 15
+}
+
 function isPaidHoliday(status: TimeLogStatus): boolean {
   return status === 'paid_leave' ||
     status === 'holiday' ||
@@ -380,13 +384,14 @@ export function computeEmployeePayroll(
     ? roundMoney(absences * dailyRate)
     : 0
 
-  const sss = settings.deductSSS && employee.sssEnabled
+  const deductGovernment = isFirstHalfPayroll(settings.periodEnd)
+  const sss = deductGovernment && settings.deductSSS && employee.sssEnabled
     ? lookupSSS(monthlyEquivalent, sssBrackets).ee_share
     : 0
-  const philHealth = settings.deductPhilHealth && employee.philHealthEnabled
+  const philHealth = deductGovernment && settings.deductPhilHealth && employee.philHealthEnabled
     ? computePhilHealth(monthlyEquivalent).employee_share
     : 0
-  const pagIbig = settings.deductPagIbig && employee.pagIbigEnabled
+  const pagIbig = deductGovernment && settings.deductPagIbig && employee.pagIbigEnabled
     ? computePagIBIG().employee_share
     : 0
   const loanDeduction = Math.max(0, employee.loanDeduction)
