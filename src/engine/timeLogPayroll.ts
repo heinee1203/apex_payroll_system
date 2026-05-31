@@ -316,13 +316,15 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
 
   const incomplete = !log.timeIn || !log.timeOut
   const lateHours = incomplete ? 0 : computeLateHours(log.timeIn, employee.schedule.start)
-  const undertimeHours = incomplete ? 0 : computeUndertimeHours(log.timeOut, employee.schedule.end)
+  const undertimeHours = incomplete || isSaturday(log.date)
+    ? 0
+    : computeUndertimeHours(log.timeOut, employee.schedule.end)
   const overtimeHours = log.otApproved && !incomplete
     ? computeOvertimeHours(log.timeOut, employee.schedule.end)
     : 0
   const regularHours = incomplete
     ? 0
-    : Math.max(0, roundHours(computeScheduledHours(employee.schedule) - lateHours - undertimeHours + overtimeHours))
+    : roundHours(computeScheduledHours(employee.schedule) + overtimeHours)
 
   return {
     regularHours,
