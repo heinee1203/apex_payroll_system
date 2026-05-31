@@ -7,11 +7,11 @@ import {
   CheckCircle2,
   Clock,
   Download,
-  Eye,
   FileText,
   Plus,
   Printer,
   RefreshCcw,
+  Save,
   Settings,
   Trash2,
   Upload,
@@ -65,10 +65,22 @@ export function PayrollWorkspace() {
   const [ocrStatus, setOcrStatus] = useState('')
   const [ocrProgress, setOcrProgress] = useState(0)
   const [ocrBusy, setOcrBusy] = useState(false)
+  const [timeLogsDirty, setTimeLogsDirty] = useState(false)
 
   useEffect(() => {
     saveWorkspace(workspace)
   }, [workspace])
+
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!timeLogsDirty) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [timeLogsDirty])
 
   useEffect(() => {
     return () => {
@@ -111,6 +123,32 @@ export function PayrollWorkspace() {
     [logsInPeriod, selectedEmployee?.id]
   )
   const selectedSummary = summaries.find((summary) => summary.employee.id === selectedEmployee?.id)
+
+  const saveTimeLogs = () => {
+    saveWorkspace(workspace)
+    setTimeLogsDirty(false)
+    toast.success('Time logs saved')
+  }
+
+  const confirmTimeLogSave = () => {
+    if (!timeLogsDirty) return true
+    const shouldSave = window.confirm('Save time log changes before continuing?')
+    if (!shouldSave) return false
+    saveTimeLogs()
+    return true
+  }
+
+  const changeView = (nextView: WorkspaceView) => {
+    if (nextView === view) return
+    if (view === 'logs' && !confirmTimeLogSave()) return
+    setView(nextView)
+  }
+
+  const selectTimeLogEmployee = (employeeId: string) => {
+    if (employeeId === effectiveSelectedEmployeeId) return
+    if (!confirmTimeLogSave()) return
+    setSelectedEmployeeId(employeeId)
+  }
 
   const updateSettings = (patch: Partial<WorkspaceState['settings']>) => {
     setWorkspace((current) => ({
@@ -172,6 +210,7 @@ export function PayrollWorkspace() {
   }
 
   const updateLog = (logId: string, patch: Partial<TimeLogEntry>) => {
+    setTimeLogsDirty(true)
     setWorkspace((current) => ({
       ...current,
       logs: current.logs.map((log) => {
@@ -190,6 +229,7 @@ export function PayrollWorkspace() {
   const fillSelectedEmployeeSchedule = () => {
     if (!selectedEmployee) return
 
+    setTimeLogsDirty(true)
     setWorkspace((current) => ({
       ...current,
       logs: current.logs.map((log) => {
@@ -211,6 +251,7 @@ export function PayrollWorkspace() {
   const clearSelectedEmployeeTimes = () => {
     if (!selectedEmployee) return
 
+    setTimeLogsDirty(true)
     setWorkspace((current) => ({
       ...current,
       logs: current.logs.map((log) => {
@@ -228,6 +269,7 @@ export function PayrollWorkspace() {
   const markBlankLogsAbsent = () => {
     if (!selectedEmployee) return
 
+    setTimeLogsDirty(true)
     setWorkspace((current) => ({
       ...current,
       logs: current.logs.map((log) => {
@@ -323,6 +365,7 @@ export function PayrollWorkspace() {
     }
 
     if (result.imported > 0) {
+      setTimeLogsDirty(true)
       toast.success(`Applied ${result.imported} photo log${result.imported === 1 ? '' : 's'}`)
     }
     if (result.skipped > 0) toast.warning(`${result.skipped} row${result.skipped === 1 ? '' : 's'} skipped`)
@@ -415,7 +458,7 @@ export function PayrollWorkspace() {
             {navItems.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
-                onClick={() => setView(id)}
+                onClick={() => changeView(id)}
                 className={`flex min-w-fit items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors lg:w-full ${
                   view === id
                     ? 'bg-cyan-500 text-slate-950 font-semibold'
@@ -470,8 +513,10 @@ export function PayrollWorkspace() {
                 logs={selectedLogs}
                 summary={selectedSummary}
                 selectedEmployeeId={selectedEmployee.id}
-                onSelectEmployee={setSelectedEmployeeId}
+                timeLogsDirty={timeLogsDirty}
+                onSelectEmployee={selectTimeLogEmployee}
                 onUpdateLog={updateLog}
+                onSaveTimeLogs={saveTimeLogs}
                 onFillSchedule={fillSelectedEmployeeSchedule}
                 onClearTimes={clearSelectedEmployeeTimes}
                 onMarkBlankAbsent={markBlankLogsAbsent}
@@ -555,8 +600,10 @@ function TimeLogsView({
   logs,
   summary,
   selectedEmployeeId,
+  timeLogsDirty,
   onSelectEmployee,
   onUpdateLog,
+  onSaveTimeLogs,
   onFillSchedule,
   onClearTimes,
   onMarkBlankAbsent,
@@ -577,8 +624,10 @@ function TimeLogsView({
   logs: TimeLogEntry[]
   summary: ReturnType<typeof computeEmployeePayroll>
   selectedEmployeeId: string
+  timeLogsDirty: boolean
   onSelectEmployee: (employeeId: string) => void
   onUpdateLog: (logId: string, patch: Partial<TimeLogEntry>) => void
+  onSaveTimeLogs: () => void
   onFillSchedule: () => void
   onClearTimes: () => void
   onMarkBlankAbsent: () => void
@@ -625,8 +674,15 @@ function TimeLogsView({
           <span className="text-sm text-slate-500">
             {formatTimeDisplay(employee.schedule.start)} to {formatTimeDisplay(employee.schedule.end)}
           </span>
+          <span className={timeLogsDirty ? 'badge-warning' : 'badge-success'}>
+            {timeLogsDirty ? 'Unsaved time logs' : 'Time logs saved'}
+          </span>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button className={timeLogsDirty ? 'btn-primary' : 'btn-secondary'} onClick={onSaveTimeLogs} disabled={!timeLogsDirty}>
+            <Save size={16} />
+            Save Time Logs
+          </button>
           <button className="btn-secondary" onClick={onFillSchedule}>
             <CheckCircle2 size={16} />
             Fill Schedule
@@ -1144,8 +1200,9 @@ function EmployeesView({
                   </td>
                   <td className="px-3 py-2 text-right">
                     <div className="flex justify-end gap-1">
-                      <button className="btn-ghost p-1 text-cyan-700" onClick={() => setSelectedEmployeePageId(employee.id)} title="Open employee page">
-                        <Eye size={16} />
+                      <button className="btn-ghost px-2 py-1 text-xs text-cyan-700" onClick={() => setSelectedEmployeePageId(employee.id)} title="Open payslip history">
+                        <FileText size={15} />
+                        Payslip
                       </button>
                       <button className="btn-ghost p-1 text-rose-700" onClick={() => onRemove(employee.id)} title="Remove employee">
                         <Trash2 size={16} />
