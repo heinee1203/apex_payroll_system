@@ -941,10 +941,42 @@ function EmployeesView({
   onRemove: (employeeId: string) => void
   onUpdate: (employeeId: string, patch: Partial<EmployeeRecord>) => void
 }) {
+  const [statusFilter, setStatusFilter] = useState<'active' | 'inactive'>('active')
+  const activeCount = employees.filter((employee) => employee.active).length
+  const inactiveCount = employees.length - activeCount
+  const visibleEmployees = employees.filter((employee) =>
+    statusFilter === 'active' ? employee.active : !employee.active
+  )
+
   return (
     <section className="space-y-4">
-      <div className="no-print flex items-center justify-between gap-3">
-        <h2 className="text-xl font-bold">Employees</h2>
+      <div className="no-print flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <h2 className="text-xl font-bold">Employees</h2>
+          <div className="inline-flex w-fit rounded-md border border-slate-300 bg-white p-1 shadow-sm">
+            {[
+              { id: 'active' as const, label: 'Active', count: activeCount },
+              { id: 'inactive' as const, label: 'Inactive', count: inactiveCount },
+            ].map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={statusFilter === option.id}
+                onClick={() => setStatusFilter(option.id)}
+                className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                  statusFilter === option.id
+                    ? 'bg-cyan-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                }`}
+              >
+                {option.label}
+                <span className={`ml-2 font-mono text-xs ${statusFilter === option.id ? 'text-cyan-50' : 'text-slate-400'}`}>
+                  {option.count}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
         <button className="btn-primary" onClick={onAdd}>
           <Plus size={16} />
           Add Employee
@@ -973,7 +1005,13 @@ function EmployeesView({
               </tr>
             </thead>
             <tbody>
-              {employees.map((employee) => (
+              {visibleEmployees.length === 0 ? (
+                <tr>
+                  <td colSpan={14} className="px-3 py-10 text-center text-sm text-slate-500">
+                    No {statusFilter} employees
+                  </td>
+                </tr>
+              ) : visibleEmployees.map((employee) => (
                 <tr
                   key={employee.id}
                   className={`border-b border-slate-100 ${employee.active ? '' : 'bg-slate-50 text-slate-500'}`}
