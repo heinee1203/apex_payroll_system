@@ -160,6 +160,11 @@ export function PayrollWorkspace() {
     setSelectedEmployeeId(employeeId)
   }
 
+  const openEmployeeInfo = (employeeId: string) => {
+    setSelectedEmployeeInfoId(employeeId)
+    setView('employee-info')
+  }
+
   const updateSettings = (patch: Partial<WorkspaceState['settings']>) => {
     setWorkspace((current) => ({
       ...current,
@@ -546,7 +551,7 @@ export function PayrollWorkspace() {
             )}
 
             {view === 'payroll' && (
-              <PayrollView summaries={summaries} totals={totals} />
+              <PayrollView summaries={summaries} totals={totals} onOpenEmployee={openEmployeeInfo} />
             )}
 
             {view === 'employees' && (
@@ -934,9 +939,11 @@ function DtrPhotoImportPanel({
 function PayrollView({
   summaries,
   totals,
+  onOpenEmployee,
 }: {
   summaries: ReturnType<typeof computeEmployeePayroll>[]
   totals: ReturnType<typeof computeWorkspaceTotals>
+  onOpenEmployee: (employeeId: string) => void
 }) {
   return (
     <section className="space-y-4">
@@ -989,7 +996,14 @@ function PayrollView({
                 return (
                   <tr key={summary.employee.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="px-1.5 py-1.5">
-                      <div className="truncate text-[12px] font-semibold" title={summary.employee.name}>{summary.employee.name}</div>
+                      <button
+                        type="button"
+                        onClick={() => onOpenEmployee(summary.employee.id)}
+                        className="block w-full truncate text-left text-[12px] font-semibold text-slate-950 hover:text-cyan-700 hover:underline"
+                        title={`Open employee info for ${summary.employee.name}`}
+                      >
+                        {summary.employee.name}
+                      </button>
                       <div className="truncate text-[10px] text-slate-500">{summary.employee.code} | {summary.employee.role}</div>
                     </td>
                     <td className="px-1.5 py-1.5 text-right">{summary.paidDays}</td>
