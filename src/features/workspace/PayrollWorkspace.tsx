@@ -751,7 +751,7 @@ function TimeLogsView({
                   : 0
 
                 return (
-                  <tr key={log.id} className={`border-b border-slate-100 ${rowTone(log.status, day.incomplete)}`}>
+                  <tr key={log.id} className={`border-b border-slate-100 ${rowTone(log.status, day.incomplete, day.absentDay)}`}>
                     <td className="px-3 py-2 font-medium">{formatDateShort(log.date)}</td>
                     <td className="px-3 py-2 text-sm text-slate-500">{getDayName(log.date)}</td>
                     <td className="px-3 py-2">
@@ -1656,9 +1656,9 @@ function Toggle({ checked, disabled = false, onChange }: { checked: boolean; dis
   )
 }
 
-function rowTone(status: TimeLogStatus, incomplete: boolean) {
+function rowTone(status: TimeLogStatus, incomplete: boolean, absentDay = false) {
   if (incomplete) return 'bg-amber-50'
-  if (status === 'absent') return 'bg-rose-50'
+  if (status === 'absent' || absentDay) return 'bg-rose-50'
   if (status === 'holiday' || status === 'legal_holiday' || status === 'non_working_holiday' || status === 'paid_leave') return 'bg-emerald-50'
   if (status === 'rest_day') return 'bg-slate-50 text-slate-500'
   return 'bg-white'

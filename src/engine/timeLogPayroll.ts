@@ -319,6 +319,18 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
   }
 
   const incomplete = !log.timeIn || !log.timeOut
+  if (incomplete && !log.timeIn && !log.timeOut && !isSaturday(log.date)) {
+    return {
+      regularHours: 0,
+      lateHours: 0,
+      undertimeHours: 0,
+      overtimeHours: 0,
+      paidDay: false,
+      absentDay: true,
+      incomplete: false,
+    }
+  }
+
   const lateHours = incomplete ? 0 : computeLateHours(log.timeIn, employee.schedule.start)
   const undertimeHours = incomplete || isSaturday(log.date)
     ? 0
