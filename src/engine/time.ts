@@ -1,4 +1,5 @@
 import type { WorkSchedule } from '../types/database'
+import { WORKING_HOURS_PER_DAY } from '../lib/constants'
 
 /**
  * Parse a time string "HH:MM" into total minutes from midnight.
@@ -64,6 +65,19 @@ export function computeRegularHours(
   }
 
   const hours = Math.min(workedMinutes / 60, 8)
+  return Math.round(hours * 100) / 100
+}
+
+/**
+ * Compute the scheduled rendered hours for a full day.
+ * Example: 07:00 to 16:00 is 9 elapsed hours less 1 hour lunch = 8 hours.
+ */
+export function computeScheduledHours(schedule: WorkSchedule): number {
+  const schedStart = parseTime(schedule.start)
+  const schedEnd = parseTime(schedule.end)
+  const scheduledMinutes = Math.max(0, schedEnd - schedStart - schedule.lunch_minutes)
+  const hours = Math.min(scheduledMinutes / 60, WORKING_HOURS_PER_DAY)
+
   return Math.round(hours * 100) / 100
 }
 

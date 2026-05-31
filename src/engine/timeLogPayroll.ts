@@ -3,7 +3,7 @@ import { computeLateHours } from './late'
 import { computeOvertimeHours } from './overtime'
 import { computePagIBIG } from './pagibig'
 import { computePhilHealth } from './philhealth'
-import { getDailyRate, getHourlyRate, computeRegularHours } from './time'
+import { getDailyRate, getHourlyRate, computeScheduledHours } from './time'
 import { computeUndertimeHours } from './undertime'
 import { lookupSSS } from './sss'
 import { OT_RATE_MULTIPLIER } from '../lib/constants'
@@ -269,7 +269,7 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
   if (log.status === 'rest_day') {
     if (isSaturday(log.date)) {
       return {
-        regularHours: 8,
+        regularHours: computeScheduledHours(employee.schedule),
         lateHours: 0,
         undertimeHours: 0,
         overtimeHours: 0,
@@ -304,7 +304,7 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
 
   if (isPaidHoliday(log.status)) {
     return {
-      regularHours: 8,
+      regularHours: computeScheduledHours(employee.schedule),
       lateHours: 0,
       undertimeHours: 0,
       overtimeHours: 0,
@@ -315,17 +315,19 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
   }
 
   const incomplete = !log.timeIn || !log.timeOut
-  const regularHours = incomplete
-    ? 0
-    : computeRegularHours(log.timeIn, log.timeOut, employee.schedule)
+  const lateHours = incomplete ? 0 : computeLateHours(log.timeIn, employee.schedule.start)
+  const undertimeHours = incomplete ? 0 : computeUndertimeHours(log.timeOut, employee.schedule.end)
   const overtimeHours = log.otApproved && !incomplete
     ? computeOvertimeHours(log.timeOut, employee.schedule.end)
     : 0
+  const regularHours = incomplete
+    ? 0
+    : Math.max(0, roundHours(computeScheduledHours(employee.schedule) - lateHours - undertimeHours + overtimeHours))
 
   return {
     regularHours,
-    lateHours: incomplete ? 0 : computeLateHours(log.timeIn, employee.schedule.start),
-    undertimeHours: incomplete ? 0 : computeUndertimeHours(log.timeOut, employee.schedule.end),
+    lateHours,
+    undertimeHours,
     overtimeHours,
     paidDay: regularHours > 0,
     absentDay: false,
