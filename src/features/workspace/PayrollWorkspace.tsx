@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -1585,9 +1585,7 @@ function EmployeeDetailPage({
     setSelectedDocument(document)
   }
 
-  const handleDepositSlipSelected = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
+  const attachDepositSlipFile = async (file: File | undefined) => {
     if (!file || !selectedHistory) return
 
     if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
@@ -1616,6 +1614,12 @@ function EmployeeDetailPage({
     } catch {
       toast.error('Failed to attach deposit slip')
     }
+  }
+
+  const handleDepositSlipSelected = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    void attachDepositSlipFile(file)
   }
 
   return (
@@ -1781,6 +1785,7 @@ function EmployeeDetailPage({
               depositSlip={selectedDepositSlip}
               inputId={`deposit-slip-${employee.id}-${selectedHistory.periodStart}-${selectedHistory.periodEnd}`}
               onFileSelected={handleDepositSlipSelected}
+              onFileDropped={attachDepositSlipFile}
               onRemove={onRemoveDepositSlip}
             />
             {selectedDocument === 'payslip' ? (
@@ -1806,14 +1811,29 @@ function DepositSlipPanel({
   depositSlip,
   inputId,
   onFileSelected,
+  onFileDropped,
   onRemove,
 }: {
   depositSlip?: DepositSlipAttachment
   inputId: string
   onFileSelected: (event: ChangeEvent<HTMLInputElement>) => void
+  onFileDropped: (file: File | undefined) => void
   onRemove: (attachmentId: string) => void
 }) {
   const isImage = depositSlip?.mimeType.startsWith('image/')
+  const [dragging, setDragging] = useState(false)
+
+  const handleDragOver = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+    setDragging(true)
+  }
+
+  const handleDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault()
+    setDragging(false)
+    onFileDropped(event.dataTransfer.files?.[0])
+  }
 
   return (
     <section className="no-print rounded-md border border-slate-200 bg-white p-3 shadow-sm">
@@ -1858,6 +1878,25 @@ function DepositSlipPanel({
           )}
         </div>
       </div>
+
+      <label
+        htmlFor={inputId}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className={`mt-3 flex cursor-pointer flex-col items-center justify-center rounded-md border border-dashed px-4 py-5 text-center transition-colors ${
+          dragging
+            ? 'border-cyan-500 bg-cyan-50 text-cyan-800'
+            : 'border-slate-300 bg-slate-50 text-slate-600 hover:border-cyan-400 hover:bg-cyan-50'
+        }`}
+      >
+        <Upload size={22} className={dragging ? 'text-cyan-700' : 'text-slate-500'} />
+        <span className="mt-2 text-sm font-semibold">
+          {depositSlip ? 'Drop deposit slip here to replace' : 'Drop deposit slip here'}
+        </span>
+        <span className="mt-1 text-xs">Image or PDF, up to 4 MB</span>
+      </label>
 
       {depositSlip && (
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3">
