@@ -34,6 +34,7 @@ import {
   STATUS_LABELS,
   type DepositSlipAttachment,
   type EmployeeRecord,
+  type FinalizedPayrollPeriod,
   type PayrollSettings,
   type PayrollSummary,
   type TimeLogEntry,
@@ -224,6 +225,10 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
       employees: current.employees.filter((employee) => employee.id !== employeeId),
       logs: current.logs.filter((log) => log.employeeId !== employeeId),
       depositSlips: current.depositSlips.filter((slip) => slip.employeeId !== employeeId),
+      finalizedPayrolls: (current.finalizedPayrolls || []).map((period) => ({
+        ...period,
+        entries: period.entries.filter((entry) => entry.employeeId !== employeeId),
+      })),
     }))
     toast.success('Employee removed')
   }
@@ -475,6 +480,67 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
     toast.success('Payroll CSV exported')
   }
 
+  const finalizeCurrentPayroll = () => {
+    if (timeLogsDirty && !confirmTimeLogSave()) return
+
+    if (summaries.length === 0) {
+      toast.error('No payroll rows to finalize')
+      return
+    }
+
+    const { periodStart, periodEnd } = workspace.settings
+    const periodKey = makePeriodKey(periodStart, periodEnd)
+
+    if ((workspace.finalizedPayrolls || []).some((period) => period.periodKey === periodKey)) {
+      toast.error('This payroll period is already finalized')
+      return
+    }
+
+    if (totals.incompleteDays > 0) {
+      const proceedWithIncomplete = window.confirm(
+        `There are ${totals.incompleteDays} incomplete time log${totals.incompleteDays === 1 ? '' : 's'}. Finalize anyway?`
+      )
+      if (!proceedWithIncomplete) return
+    }
+
+    const confirmed = window.confirm(
+      `Finalize payroll for ${formatDate(periodStart)} to ${formatDate(periodEnd)}? This will lock the current values and move to the next cycle.`
+    )
+    if (!confirmed) return
+
+    const finalizedAt = new Date().toISOString()
+    const finalized: FinalizedPayrollPeriod = {
+      id: `payroll|${periodKey}|${Date.now()}`,
+      periodKey,
+      periodStart,
+      periodEnd,
+      finalizedAt,
+      totals: { ...totals },
+      entries: summaries.map((summary) => ({
+        employeeId: summary.employee.id,
+        periodKey,
+        periodStart,
+        periodEnd,
+        logs: logsInPeriod
+          .filter((log) => log.employeeId === summary.employee.id)
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .map(cloneTimeLog),
+        summary: clonePayrollSummary(summary),
+      })),
+    }
+    const nextPeriod = getNextSemiMonthlyPeriod(periodStart, periodEnd)
+    const nextSettings = { ...workspace.settings, ...nextPeriod }
+
+    setWorkspace((current) => ({
+      ...current,
+      finalizedPayrolls: [...(current.finalizedPayrolls || []), finalized],
+      settings: nextSettings,
+      logs: mergeMissingTimeLogs(current.logs, current.employees, nextSettings),
+    }))
+    setTimeLogsDirty(false)
+    toast.success(`Payroll finalized. Next cycle: ${formatDate(nextPeriod.periodStart)} to ${formatDate(nextPeriod.periodEnd)}`)
+  }
+
   const resetWorkspace = () => {
     const fresh = createDefaultWorkspace()
     setWorkspace(fresh)
@@ -587,7 +653,15 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
             )}
 
             {view === 'payroll' && (
-              <PayrollView summaries={summaries} totals={totals} onOpenEmployee={openEmployeeInfo} />
+              <PayrollView
+                summaries={summaries}
+                totals={totals}
+                periodStart={workspace.settings.periodStart}
+                periodEnd={workspace.settings.periodEnd}
+                finalizedCount={(workspace.finalizedPayrolls || []).length}
+                onFinalizePayroll={finalizeCurrentPayroll}
+                onOpenEmployee={openEmployeeInfo}
+              />
             )}
 
             {view === 'employees' && (
@@ -605,6 +679,7 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
                 logs={workspace.logs}
                 settings={workspace.settings}
                 depositSlips={workspace.depositSlips}
+                finalizedPayrolls={workspace.finalizedPayrolls || []}
                 selectedEmployeeId={selectedEmployeeInfoId}
                 onSelectEmployee={setSelectedEmployeeInfoId}
                 onUpdateEmployee={updateEmployee}
@@ -1118,15 +1193,36 @@ function DtrPhotoImportPanel({
 function PayrollView({
   summaries,
   totals,
+  periodStart,
+  periodEnd,
+  finalizedCount,
+  onFinalizePayroll,
   onOpenEmployee,
 }: {
   summaries: ReturnType<typeof computeEmployeePayroll>[]
   totals: ReturnType<typeof computeWorkspaceTotals>
+  periodStart: string
+  periodEnd: string
+  finalizedCount: number
+  onFinalizePayroll: () => void
   onOpenEmployee: (employeeId: string) => void
 }) {
   return (
     <section className="space-y-4">
       <div className="rounded-md border border-slate-200 bg-white p-4">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-base font-semibold">Current Payroll Cycle</h2>
+            <p className="text-sm text-slate-500">{formatDate(periodStart)} to {formatDate(periodEnd)}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="badge-neutral">{finalizedCount} locked</span>
+            <button className="btn-primary" onClick={onFinalizePayroll}>
+              <CheckCircle2 size={16} />
+              Finalize Payroll
+            </button>
+          </div>
+        </div>
         <div className="grid gap-3 md:grid-cols-4">
           <Metric label="Employees" value={String(totals.employees)} />
           <Metric label="Gross + OT" value={formatCurrency(totals.grossPay + totals.overtimePay)} />
@@ -1416,6 +1512,7 @@ type PayrollHistoryEntry = {
   periodEnd: string
   logs: TimeLogEntry[]
   summary: PayrollSummary
+  finalizedAt?: string
 }
 
 type HistoryDocument = 'payslip' | 'dtr'
@@ -1425,6 +1522,7 @@ function EmployeeInfoView({
   logs,
   settings,
   depositSlips,
+  finalizedPayrolls,
   selectedEmployeeId,
   onSelectEmployee,
   onUpdateEmployee,
@@ -1435,6 +1533,7 @@ function EmployeeInfoView({
   logs: TimeLogEntry[]
   settings: PayrollSettings
   depositSlips: DepositSlipAttachment[]
+  finalizedPayrolls: FinalizedPayrollPeriod[]
   selectedEmployeeId: string
   onSelectEmployee: (employeeId: string) => void
   onUpdateEmployee: (employeeId: string, patch: Partial<EmployeeRecord>) => void
@@ -1520,6 +1619,7 @@ function EmployeeInfoView({
         logs={logs}
         settings={settings}
         depositSlips={depositSlips}
+        finalizedPayrolls={finalizedPayrolls}
         onUpdate={(patch) => {
           if (typeof patch.active === 'boolean') {
             setEmployeeStatusFilter(patch.active ? 'active' : 'inactive')
@@ -1538,6 +1638,7 @@ function EmployeeDetailPage({
   logs,
   settings,
   depositSlips,
+  finalizedPayrolls,
   onBack,
   onUpdate,
   onAttachDepositSlip,
@@ -1547,14 +1648,15 @@ function EmployeeDetailPage({
   logs: TimeLogEntry[]
   settings: PayrollSettings
   depositSlips: DepositSlipAttachment[]
+  finalizedPayrolls: FinalizedPayrollPeriod[]
   onBack?: () => void
   onUpdate: (patch: Partial<EmployeeRecord>) => void
   onAttachDepositSlip: (attachment: DepositSlipAttachment) => void
   onRemoveDepositSlip: (attachmentId: string) => void
 }) {
   const history = useMemo(
-    () => buildEmployeePayrollHistory(employee, logs, settings),
-    [employee, logs, settings]
+    () => buildEmployeePayrollHistory(employee, logs, settings, finalizedPayrolls),
+    [employee, finalizedPayrolls, logs, settings]
   )
   const [selectedPeriodKey, setSelectedPeriodKey] = useState('')
   const [selectedDocument, setSelectedDocument] = useState<HistoryDocument>('payslip')
@@ -1691,7 +1793,12 @@ function EmployeeDetailPage({
                     }`}
                     onClick={() => setSelectedPeriodKey(entry.periodKey)}
                   >
-                    <td className="px-3 py-2 font-medium">{formatDateShort(entry.periodStart)} - {formatDateShort(entry.periodEnd)}</td>
+                    <td className="px-3 py-2 font-medium">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span>{formatDateShort(entry.periodStart)} - {formatDateShort(entry.periodEnd)}</span>
+                        {entry.finalizedAt && <span className="badge-success px-1.5 py-1 text-[10px]">Locked</span>}
+                      </div>
+                    </td>
                     <td className="px-3 py-2">{getPayslipType(entry.periodEnd)}</td>
                     <td className="px-3 py-2 text-right font-mono">{formatCurrency(entry.summary.grossPay + entry.summary.overtimePay)}</td>
                     <td className="px-3 py-2 text-right font-mono text-rose-700">{formatCurrency(entry.summary.totalDeductions)}</td>
@@ -1792,7 +1899,7 @@ function EmployeeDetailPage({
               <EmployeePayslip entry={selectedHistory} />
             ) : (
               <DtrReport
-                employee={employee}
+                employee={selectedHistory.summary.employee}
                 logs={selectedHistory.logs}
                 summary={selectedHistory.summary}
                 periodStart={selectedHistory.periodStart}
@@ -2184,16 +2291,72 @@ function clockMinutes(time: string): number | null {
   return hours * 60 + minutes
 }
 
+function makePeriodKey(periodStart: string, periodEnd: string): string {
+  return `${periodStart}|${periodEnd}`
+}
+
+function cloneEmployee(employee: EmployeeRecord): EmployeeRecord {
+  return {
+    ...employee,
+    schedule: { ...employee.schedule },
+  }
+}
+
+function cloneTimeLog(log: TimeLogEntry): TimeLogEntry {
+  return { ...log }
+}
+
+function clonePayrollSummary(summary: PayrollSummary): PayrollSummary {
+  return {
+    ...summary,
+    employee: cloneEmployee(summary.employee),
+  }
+}
+
+function getNextSemiMonthlyPeriod(periodStart: string, periodEnd: string) {
+  const end = parseDateKey(periodEnd)
+
+  if (end.getDate() <= 15) {
+    const monthEnd = new Date(end.getFullYear(), end.getMonth() + 1, 0)
+    return {
+      periodStart: toDateKey(new Date(end.getFullYear(), end.getMonth(), 16)),
+      periodEnd: toDateKey(monthEnd),
+    }
+  }
+
+  const nextMonth = new Date(end.getFullYear(), end.getMonth() + 1, 1)
+  return {
+    periodStart: toDateKey(nextMonth),
+    periodEnd: toDateKey(new Date(nextMonth.getFullYear(), nextMonth.getMonth(), 15)),
+  }
+}
+
 function buildEmployeePayrollHistory(
   employee: EmployeeRecord,
   logs: TimeLogEntry[],
-  settings: PayrollSettings
+  settings: PayrollSettings,
+  finalizedPayrolls: FinalizedPayrollPeriod[] = []
 ): PayrollHistoryEntry[] {
   const employeeLogs = logs.filter((log) => log.employeeId === employee.id)
   const groups = new Map<string, { periodStart: string; periodEnd: string; logs: TimeLogEntry[] }>()
+  const finalizedEntries = finalizedPayrolls.flatMap((period) =>
+    period.entries
+      .filter((entry) => entry.employeeId === employee.id)
+      .map((entry) => ({
+        periodKey: entry.periodKey || makePeriodKey(entry.periodStart, entry.periodEnd),
+        periodStart: entry.periodStart,
+        periodEnd: entry.periodEnd,
+        logs: entry.logs.map(cloneTimeLog).sort((a, b) => a.date.localeCompare(b.date)),
+        summary: clonePayrollSummary(entry.summary),
+        finalizedAt: period.finalizedAt,
+      }))
+  )
+  const finalizedKeys = new Set(finalizedEntries.map((entry) => entry.periodKey))
 
   const addGroup = (periodStart: string, periodEnd: string, groupLogs: TimeLogEntry[]) => {
-    const periodKey = `${periodStart}|${periodEnd}`
+    const periodKey = makePeriodKey(periodStart, periodEnd)
+    if (finalizedKeys.has(periodKey)) return
+
     const existing = groups.get(periodKey)
     if (existing) {
       existing.logs.push(...groupLogs)
@@ -2215,12 +2378,12 @@ function buildEmployeePayrollHistory(
     addGroup(period.periodStart, period.periodEnd, [log])
   }
 
-  return Array.from(groups.entries())
+  const liveEntries = Array.from(groups.entries())
     .map(([periodKey, group]) => ({
       periodKey,
       periodStart: group.periodStart,
       periodEnd: group.periodEnd,
-      logs: group.logs.sort((a, b) => a.date.localeCompare(b.date)),
+      logs: group.logs.map(cloneTimeLog).sort((a, b) => a.date.localeCompare(b.date)),
       summary: computeEmployeePayroll(
         employee,
         group.logs,
@@ -2228,6 +2391,8 @@ function buildEmployeePayrollHistory(
         DEFAULT_SSS_BRACKETS
       ),
     }))
+
+  return [...finalizedEntries, ...liveEntries]
     .sort((a, b) => b.periodStart.localeCompare(a.periodStart))
 }
 
@@ -2612,6 +2777,14 @@ function makeDateKey(year: number, month: number, day: number, periodStart: stri
   return key >= periodStart && key <= periodEnd ? key : null
 }
 
+function toDateKey(date: Date): string {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-')
+}
+
 function parseDateKey(value: string): Date {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day)
@@ -2657,6 +2830,7 @@ function loadWorkspace(): WorkspaceState {
       employees: mergedEmployees,
       logs: parsed.logs?.length ? parsed.logs : fallback.logs,
       depositSlips: Array.isArray(parsed.depositSlips) ? parsed.depositSlips : fallback.depositSlips,
+      finalizedPayrolls: Array.isArray(parsed.finalizedPayrolls) ? parsed.finalizedPayrolls : fallback.finalizedPayrolls,
     })
   } catch {
     return fallback
@@ -2668,6 +2842,25 @@ function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
 
   return {
     ...workspace,
+    finalizedPayrolls: (workspace.finalizedPayrolls || [])
+      .filter((period) =>
+        period.id &&
+        period.periodKey &&
+        period.periodStart &&
+        period.periodEnd &&
+        Array.isArray(period.entries)
+      )
+      .map((period) => ({
+        ...period,
+        entries: period.entries.filter((entry) =>
+          employeesById.has(entry.employeeId) &&
+          entry.periodKey &&
+          entry.periodStart &&
+          entry.periodEnd &&
+          entry.summary &&
+          Array.isArray(entry.logs)
+        ),
+      })),
     depositSlips: (workspace.depositSlips || [])
       .filter((slip) =>
         slip.id &&

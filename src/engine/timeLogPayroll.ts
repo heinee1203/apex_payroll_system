@@ -72,6 +72,7 @@ export interface WorkspaceState {
   logs: TimeLogEntry[]
   settings: PayrollSettings
   depositSlips: DepositSlipAttachment[]
+  finalizedPayrolls: FinalizedPayrollPeriod[]
 }
 
 export interface DailyComputation {
@@ -117,6 +118,25 @@ export interface WorkspaceTotals {
   employees: number
   incompleteDays: number
   overtimeHours: number
+}
+
+export interface FinalizedPayrollEntry {
+  employeeId: string
+  periodKey: string
+  periodStart: string
+  periodEnd: string
+  logs: TimeLogEntry[]
+  summary: PayrollSummary
+}
+
+export interface FinalizedPayrollPeriod {
+  id: string
+  periodKey: string
+  periodStart: string
+  periodEnd: string
+  finalizedAt: string
+  totals: WorkspaceTotals
+  entries: FinalizedPayrollEntry[]
 }
 
 export const STATUS_LABELS: Record<TimeLogStatus, string> = {
