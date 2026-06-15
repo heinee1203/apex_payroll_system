@@ -2323,6 +2323,162 @@ function getNextSemiMonthlyPeriod(periodStart: string, periodEnd: string) {
   }
 }
 
+const MANUAL_PAYSLIP_PERIOD = {
+  periodKey: makePeriodKey('2026-05-01', '2026-05-15'),
+  periodStart: '2026-05-01',
+  periodEnd: '2026-05-15',
+  finalizedAt: '2026-05-15T00:00:00.000Z',
+}
+
+const MANUAL_PAYSLIPS = [
+  {
+    code: 'ALA-009',
+    name: 'VALENCIA, MARIA VILMA',
+    role: 'Registrar',
+    monthlyBasicPay: 14500,
+    grossPay: 7250,
+    sss: 0,
+    philHealth: 362.5,
+    pagIbig: 200,
+    undertimeHours: 6,
+    undertimeDeduction: 418.27,
+    totalDeductions: 980.77,
+    netPay: 6269.23,
+  },
+  {
+    code: 'ALA-005',
+    name: 'CARASCAL, MA. VERONICA',
+    role: 'Principal',
+    monthlyBasicPay: 18500,
+    grossPay: 9250,
+    sss: 875,
+    philHealth: 362.5,
+    pagIbig: 200,
+    undertimeHours: 6,
+    undertimeDeduction: 533.65,
+    totalDeductions: 1971.15,
+    netPay: 7278.85,
+  },
+] as const
+
+function applyManualPayslipHistory(workspace: WorkspaceState): WorkspaceState {
+  const finalizedPayrolls = (workspace.finalizedPayrolls || []).map((period) => ({
+    ...period,
+    entries: [...period.entries],
+  }))
+  let changed = false
+  const periodIndex = finalizedPayrolls.findIndex((period) => period.periodKey === MANUAL_PAYSLIP_PERIOD.periodKey)
+  const targetPeriod: FinalizedPayrollPeriod = periodIndex >= 0
+    ? { ...finalizedPayrolls[periodIndex], entries: [...finalizedPayrolls[periodIndex].entries] }
+    : {
+        id: `manual-payslip|${MANUAL_PAYSLIP_PERIOD.periodKey}`,
+        periodKey: MANUAL_PAYSLIP_PERIOD.periodKey,
+        periodStart: MANUAL_PAYSLIP_PERIOD.periodStart,
+        periodEnd: MANUAL_PAYSLIP_PERIOD.periodEnd,
+        finalizedAt: MANUAL_PAYSLIP_PERIOD.finalizedAt,
+        totals: {
+          grossPay: 0,
+          overtimePay: 0,
+          deductions: 0,
+          netPay: 0,
+          employees: 0,
+          incompleteDays: 0,
+          overtimeHours: 0,
+        },
+        entries: [],
+      }
+
+  for (const manualPayslip of MANUAL_PAYSLIPS) {
+    const employee = findManualPayslipEmployee(workspace.employees, manualPayslip.code, manualPayslip.name)
+    if (!employee) continue
+
+    const alreadyImported = finalizedPayrolls.some((period) =>
+      period.entries.some((entry) =>
+        entry.employeeId === employee.id &&
+        entry.periodKey === MANUAL_PAYSLIP_PERIOD.periodKey
+      )
+    )
+    if (alreadyImported) continue
+
+    targetPeriod.entries.push(buildManualPayslipEntry(employee, manualPayslip))
+    changed = true
+  }
+
+  if (!changed) return workspace
+
+  targetPeriod.entries.sort((a, b) => a.summary.employee.name.localeCompare(b.summary.employee.name))
+  targetPeriod.totals = computeWorkspaceTotals(targetPeriod.entries.map((entry) => entry.summary))
+
+  if (periodIndex >= 0) {
+    finalizedPayrolls[periodIndex] = targetPeriod
+  } else {
+    finalizedPayrolls.push(targetPeriod)
+  }
+
+  finalizedPayrolls.sort((a, b) => b.periodStart.localeCompare(a.periodStart))
+  return { ...workspace, finalizedPayrolls }
+}
+
+function findManualPayslipEmployee(employees: EmployeeRecord[], code: string, name: string): EmployeeRecord | undefined {
+  const normalizedName = normalizeNameForLookup(name)
+  return employees.find((employee) =>
+    employee.code.toUpperCase() === code.toUpperCase() ||
+    normalizeNameForLookup(employee.name).includes(normalizedName)
+  )
+}
+
+function normalizeNameForLookup(name: string): string {
+  return name.toUpperCase().replace(/[^A-Z]/g, '')
+}
+
+function buildManualPayslipEntry(
+  employee: EmployeeRecord,
+  manualPayslip: typeof MANUAL_PAYSLIPS[number]
+): FinalizedPayrollPeriod['entries'][number] {
+  const paidDays = 13
+  const dailyRate = manualPayslip.grossPay / paidDays
+  const hourlyRate = dailyRate / 8
+  const employeeSnapshot = cloneEmployee({
+    ...employee,
+    name: manualPayslip.name,
+    role: employee.role || manualPayslip.role,
+    basicPay: manualPayslip.monthlyBasicPay,
+    payType: 'monthly',
+  })
+
+  return {
+    employeeId: employee.id,
+    periodKey: MANUAL_PAYSLIP_PERIOD.periodKey,
+    periodStart: MANUAL_PAYSLIP_PERIOD.periodStart,
+    periodEnd: MANUAL_PAYSLIP_PERIOD.periodEnd,
+    logs: [],
+    summary: {
+      employee: employeeSnapshot,
+      paidDays,
+      absences: 0,
+      incompleteDays: 0,
+      regularHours: paidDays * 8,
+      lateHours: 0,
+      undertimeHours: manualPayslip.undertimeHours,
+      overtimeHours: 0,
+      grossPay: manualPayslip.grossPay,
+      overtimePay: 0,
+      lateDeduction: 0,
+      undertimeDeduction: manualPayslip.undertimeDeduction,
+      absenceDeduction: 0,
+      sss: manualPayslip.sss,
+      philHealth: manualPayslip.philHealth,
+      pagIbig: manualPayslip.pagIbig,
+      loanDeduction: 0,
+      adjustment: 0,
+      totalDeductions: manualPayslip.totalDeductions,
+      netPay: manualPayslip.netPay,
+      dailyRate,
+      hourlyRate,
+    },
+  }
+}
+
 function buildPreviousMonthSssBaseMap(finalizedPayrolls: FinalizedPayrollPeriod[], periodStart: string): Map<string, number> {
   const result = new Map<string, number>()
 
@@ -2876,7 +3032,7 @@ function loadWorkspace(): WorkspaceState {
 function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
   const employeesById = new Map(workspace.employees.map((employee) => [employee.id, employee]))
 
-  return {
+  const migrated: WorkspaceState = {
     ...workspace,
     finalizedPayrolls: (workspace.finalizedPayrolls || [])
       .filter((period) =>
@@ -2928,6 +3084,8 @@ function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
       }
     }),
   }
+
+  return applyManualPayslipHistory(migrated)
 }
 
 function saveWorkspace(workspace: WorkspaceState) {
