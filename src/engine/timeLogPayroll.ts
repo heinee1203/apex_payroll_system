@@ -110,6 +110,10 @@ export interface PayrollSummary {
   hourlyRate: number
 }
 
+export interface PayrollComputationOptions {
+  sssContributionBase?: number | null
+}
+
 export interface WorkspaceTotals {
   grossPay: number
   overtimePay: number
@@ -392,7 +396,8 @@ export function computeEmployeePayroll(
   employee: EmployeeRecord,
   logs: TimeLogEntry[],
   settings: PayrollSettings,
-  sssBrackets: SSSBracket[]
+  sssBrackets: SSSBracket[],
+  options: PayrollComputationOptions = {}
 ): PayrollSummary {
   const monthlyPayableDays = Math.max(1, getMonthlyNonSundayDays(settings.periodStart))
   const periodPayableDays = countNonSundayDays(settings.periodStart, settings.periodEnd)
@@ -432,8 +437,9 @@ export function computeEmployeePayroll(
     : 0
 
   const deductGovernment = isFirstHalfPayroll(settings.periodEnd)
+  const sssContributionBase = options.sssContributionBase ?? monthlyEquivalent
   const sss = deductGovernment && settings.deductSSS && employee.sssEnabled
-    ? lookupSSS(monthlyEquivalent, sssBrackets).ee_share
+    ? lookupSSS(sssContributionBase, sssBrackets).ee_share
     : 0
   const philHealth = deductGovernment && settings.deductPhilHealth && employee.philHealthEnabled
     ? computePhilHealth(monthlyEquivalent).employee_share

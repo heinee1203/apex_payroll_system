@@ -7,26 +7,28 @@ export interface SSSContribution {
 }
 
 /**
- * Lookup SSS contribution based on monthly basic pay.
- * Finds the bracket where range_low <= basicPay <= range_high.
+ * Lookup SSS contribution based on the monthly contribution base.
+ * Finds the bracket where range_low <= monthlySalary <= range_high.
  *
- * @param monthlyBasicPay - Employee's monthly basic pay
+ * @param monthlySalary - Employee's monthly salary/contribution base
  * @param brackets - SSS contribution table (sorted by range_low)
  * @returns SSS contribution amounts
  */
 export function lookupSSS(
-  monthlyBasicPay: number,
+  monthlySalary: number,
   brackets: SSSBracket[]
 ): SSSContribution {
+  if (monthlySalary <= 0) return { ee_share: 0, er_share: 0, ec: 0 }
+
   // Find matching bracket
   const bracket = brackets.find(
-    (b) => monthlyBasicPay >= b.range_low && monthlyBasicPay <= b.range_high
+    (b) => monthlySalary >= b.range_low && monthlySalary <= b.range_high
   )
 
   if (!bracket) {
     // If salary exceeds all brackets, use the highest bracket
     const highest = brackets[brackets.length - 1]
-    if (highest && monthlyBasicPay > highest.range_high) {
+    if (highest && monthlySalary > highest.range_high) {
       return {
         ee_share: highest.ee_share,
         er_share: highest.er_share,

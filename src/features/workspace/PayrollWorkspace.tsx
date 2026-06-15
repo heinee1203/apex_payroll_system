@@ -116,12 +116,23 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
     [workspace.logs, workspace.settings.periodEnd, workspace.settings.periodStart]
   )
 
+  const previousMonthSssBaseByEmployee = useMemo(
+    () => buildPreviousMonthSssBaseMap(workspace.finalizedPayrolls || [], workspace.settings.periodStart),
+    [workspace.finalizedPayrolls, workspace.settings.periodStart]
+  )
+
   const summaries = useMemo(
     () => activeEmployees.map((employee) => {
       const employeeLogs = logsInPeriod.filter((log) => log.employeeId === employee.id)
-      return computeEmployeePayroll(employee, employeeLogs, workspace.settings, DEFAULT_SSS_BRACKETS)
+      return computeEmployeePayroll(
+        employee,
+        employeeLogs,
+        workspace.settings,
+        DEFAULT_SSS_BRACKETS,
+        { sssContributionBase: previousMonthSssBaseByEmployee.get(employee.id) }
+      )
     }),
-    [activeEmployees, logsInPeriod, workspace.settings]
+    [activeEmployees, logsInPeriod, previousMonthSssBaseByEmployee, workspace.settings]
   )
 
   const totals = useMemo(() => computeWorkspaceTotals(summaries), [summaries])
@@ -2312,6 +2323,43 @@ function getNextSemiMonthlyPeriod(periodStart: string, periodEnd: string) {
   }
 }
 
+function buildPreviousMonthSssBaseMap(finalizedPayrolls: FinalizedPayrollPeriod[], periodStart: string): Map<string, number> {
+  const result = new Map<string, number>()
+
+  for (const period of finalizedPayrolls) {
+    if (!isPreviousMonthPayroll(period.periodEnd, periodStart)) continue
+
+    for (const entry of period.entries) {
+      const totalSalary = entry.summary.grossPay + entry.summary.overtimePay
+      result.set(entry.employeeId, roundCurrency((result.get(entry.employeeId) || 0) + totalSalary))
+    }
+  }
+
+  return result
+}
+
+function getPreviousMonthSssBase(
+  finalizedPayrolls: FinalizedPayrollPeriod[],
+  employeeId: string,
+  periodStart: string
+): number | undefined {
+  const baseByEmployee = buildPreviousMonthSssBaseMap(finalizedPayrolls, periodStart)
+  return baseByEmployee.has(employeeId) ? baseByEmployee.get(employeeId) : undefined
+}
+
+function isPreviousMonthPayroll(payrollPeriodEnd: string, currentPeriodStart: string): boolean {
+  const current = parseDateKey(currentPeriodStart)
+  const payrollEnd = parseDateKey(payrollPeriodEnd)
+  const previousMonth = current.getMonth() === 0 ? 11 : current.getMonth() - 1
+  const previousYear = current.getMonth() === 0 ? current.getFullYear() - 1 : current.getFullYear()
+
+  return payrollEnd.getFullYear() === previousYear && payrollEnd.getMonth() === previousMonth
+}
+
+function roundCurrency(value: number): number {
+  return Math.round(value * 100) / 100
+}
+
 function buildEmployeePayrollHistory(
   employee: EmployeeRecord,
   logs: TimeLogEntry[],
@@ -2369,7 +2417,14 @@ function buildEmployeePayrollHistory(
         employee,
         group.logs,
         { ...settings, periodStart: group.periodStart, periodEnd: group.periodEnd },
-        DEFAULT_SSS_BRACKETS
+        DEFAULT_SSS_BRACKETS,
+        {
+          sssContributionBase: getPreviousMonthSssBase(
+            finalizedPayrolls,
+            employee.id,
+            group.periodStart
+          ),
+        }
       ),
     }))
 
