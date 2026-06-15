@@ -2486,8 +2486,8 @@ function buildPreviousMonthSssBaseMap(finalizedPayrolls: FinalizedPayrollPeriod[
     if (!isPreviousMonthPayroll(period.periodEnd, periodStart)) continue
 
     for (const entry of period.entries) {
-      const totalSalary = entry.summary.grossPay + entry.summary.overtimePay
-      result.set(entry.employeeId, roundCurrency((result.get(entry.employeeId) || 0) + totalSalary))
+      const netSalary = entry.summary.netPay
+      result.set(entry.employeeId, roundCurrency((result.get(entry.employeeId) || 0) + netSalary))
     }
   }
 
