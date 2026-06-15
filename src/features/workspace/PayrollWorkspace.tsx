@@ -1212,6 +1212,8 @@ function PayrollView({
   totals: ReturnType<typeof computeWorkspaceTotals>
   onOpenEmployee: (employeeId: string) => void
 }) {
+  const [showGovernmentBreakdown, setShowGovernmentBreakdown] = useState(false)
+
   return (
     <section className="space-y-4">
       <div className="rounded-md border border-slate-200 bg-white p-4">
@@ -1224,22 +1226,47 @@ function PayrollView({
       </div>
 
       <div className="card overflow-hidden">
+        <div className="no-print flex items-center justify-end border-b border-slate-200 bg-white px-3 py-2">
+          <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+            <span>GOV breakdown</span>
+            <Toggle checked={showGovernmentBreakdown} onChange={setShowGovernmentBreakdown} />
+          </label>
+        </div>
         <div className="overflow-hidden">
           <table className="w-full table-fixed text-[11px] leading-tight">
-            <colgroup>
-              <col className="w-[22%]" />
-              <col className="w-[4%]" />
-              <col className="w-[4%]" />
-              <col className="w-[9%]" />
-              <col className="w-[7%]" />
-              <col className="w-[7%]" />
-              <col className="w-[7%]" />
-              <col className="w-[8%]" />
-              <col className="w-[8%]" />
-              <col className="w-[7%]" />
-              <col className="w-[7%]" />
-              <col className="w-[10%]" />
-            </colgroup>
+            {showGovernmentBreakdown ? (
+              <colgroup>
+                <col className="w-[18%]" />
+                <col className="w-[4%]" />
+                <col className="w-[4%]" />
+                <col className="w-[8%]" />
+                <col className="w-[5%]" />
+                <col className="w-[6%]" />
+                <col className="w-[6%]" />
+                <col className="w-[7%]" />
+                <col className="w-[6.5%]" />
+                <col className="w-[7.5%]" />
+                <col className="w-[6.5%]" />
+                <col className="w-[5.5%]" />
+                <col className="w-[5%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+            ) : (
+              <colgroup>
+                <col className="w-[22%]" />
+                <col className="w-[4%]" />
+                <col className="w-[4%]" />
+                <col className="w-[9%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[8%]" />
+                <col className="w-[8%]" />
+                <col className="w-[7%]" />
+                <col className="w-[7%]" />
+                <col className="w-[10%]" />
+              </colgroup>
+            )}
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
                 <th className="px-1.5 py-1.5 text-[10px] tracking-normal">Employee</th>
@@ -1250,7 +1277,15 @@ function PayrollView({
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Late</th>
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">UT</th>
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Absent</th>
-                <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Gov</th>
+                {showGovernmentBreakdown ? (
+                  <>
+                    <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">SSS</th>
+                    <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">PhilHealth</th>
+                    <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal" title="Pag-IBIG / HDMF">HDMF</th>
+                  </>
+                ) : (
+                  <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Gov</th>
+                )}
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Loans</th>
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Adj</th>
                 <th className="px-1.5 py-1.5 text-right text-[10px] tracking-normal">Net Pay</th>
@@ -1280,7 +1315,15 @@ function PayrollView({
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.lateDeduction ? formatCurrency(summary.lateDeduction) : '-'}</td>
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.undertimeDeduction ? formatCurrency(summary.undertimeDeduction) : '-'}</td>
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-rose-700">{summary.absenceDeduction ? formatCurrency(summary.absenceDeduction) : '-'}</td>
-                    <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{government ? formatCurrency(government) : '-'}</td>
+                    {showGovernmentBreakdown ? (
+                      <>
+                        <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.sss ? formatCurrency(summary.sss) : '-'}</td>
+                        <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.philHealth ? formatCurrency(summary.philHealth) : '-'}</td>
+                        <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.pagIbig ? formatCurrency(summary.pagIbig) : '-'}</td>
+                      </>
+                    ) : (
+                      <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{government ? formatCurrency(government) : '-'}</td>
+                    )}
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.loanDeduction ? formatCurrency(summary.loanDeduction) : '-'}</td>
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono">{summary.adjustment ? formatCurrency(summary.adjustment) : '-'}</td>
                     <td className="whitespace-nowrap px-1.5 py-1.5 text-right font-mono text-[12px] font-bold">{formatCurrency(summary.netPay)}</td>
