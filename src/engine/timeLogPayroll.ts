@@ -367,7 +367,7 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
   const lateHours = incomplete || isSaturday(log.date)
     ? 0
     : computeLateHours(log.timeIn, employee.schedule.start)
-  const undertimeHours = incomplete
+  const undertimeHours = incomplete || isSaturday(log.date)
     ? 0
     : computeUndertimeHours(log.timeOut, employee.schedule.end)
   const overtimeHours = log.otApproved && !incomplete
