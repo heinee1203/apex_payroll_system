@@ -607,6 +607,12 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
+                {view === 'payroll' && (
+                  <button className="btn-primary" onClick={finalizeCurrentPayroll}>
+                    <CheckCircle2 size={16} />
+                    Finalize Payroll
+                  </button>
+                )}
                 <button className="btn-secondary" onClick={exportPayrollCsv}>
                   <Download size={16} />
                   Export CSV
@@ -656,10 +662,6 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
               <PayrollView
                 summaries={summaries}
                 totals={totals}
-                periodStart={workspace.settings.periodStart}
-                periodEnd={workspace.settings.periodEnd}
-                finalizedCount={(workspace.finalizedPayrolls || []).length}
-                onFinalizePayroll={finalizeCurrentPayroll}
                 onOpenEmployee={openEmployeeInfo}
               />
             )}
@@ -1193,36 +1195,15 @@ function DtrPhotoImportPanel({
 function PayrollView({
   summaries,
   totals,
-  periodStart,
-  periodEnd,
-  finalizedCount,
-  onFinalizePayroll,
   onOpenEmployee,
 }: {
   summaries: ReturnType<typeof computeEmployeePayroll>[]
   totals: ReturnType<typeof computeWorkspaceTotals>
-  periodStart: string
-  periodEnd: string
-  finalizedCount: number
-  onFinalizePayroll: () => void
   onOpenEmployee: (employeeId: string) => void
 }) {
   return (
     <section className="space-y-4">
       <div className="rounded-md border border-slate-200 bg-white p-4">
-        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">Current Payroll Cycle</h2>
-            <p className="text-sm text-slate-500">{formatDate(periodStart)} to {formatDate(periodEnd)}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="badge-neutral">{finalizedCount} locked</span>
-            <button className="btn-primary" onClick={onFinalizePayroll}>
-              <CheckCircle2 size={16} />
-              Finalize Payroll
-            </button>
-          </div>
-        </div>
         <div className="grid gap-3 md:grid-cols-4">
           <Metric label="Employees" value={String(totals.employees)} />
           <Metric label="Gross + OT" value={formatCurrency(totals.grossPay + totals.overtimePay)} />
