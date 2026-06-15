@@ -442,7 +442,7 @@ export function computeEmployeePayroll(
     ? lookupSSS(sssContributionBase, sssBrackets).ee_share
     : 0
   const philHealth = deductGovernment && settings.deductPhilHealth && employee.philHealthEnabled
-    ? computePhilHealth(monthlyEquivalent).employee_share
+    ? computePhilHealth().employee_share
     : 0
   const pagIbig = deductGovernment && settings.deductPagIbig && employee.pagIbigEnabled
     ? computePagIBIG().employee_share

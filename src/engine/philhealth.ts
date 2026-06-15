@@ -1,4 +1,4 @@
-import { PHILHEALTH_RATE } from '../lib/constants'
+import { PHILHEALTH_EE_SHARE, PHILHEALTH_ER_SHARE } from '../lib/constants'
 
 export interface PhilHealthContribution {
   employee_share: number
@@ -9,16 +9,14 @@ export interface PhilHealthContribution {
 /**
  * Compute PhilHealth contribution.
  *
- * Formula: monthly_premium = basic_pay x 0.05
- *          employee_share = premium / 2
+ * Fixed employee deduction per first-half payroll.
  *
- * @param monthlyBasicPay - Employee's monthly basic pay
  * @returns PhilHealth contribution amounts
  */
-export function computePhilHealth(monthlyBasicPay: number): PhilHealthContribution {
-  const total = Math.round(monthlyBasicPay * PHILHEALTH_RATE * 100) / 100
-  const employee_share = Math.round((total / 2) * 100) / 100
-  const employer_share = Math.round((total - employee_share) * 100) / 100
+export function computePhilHealth(): PhilHealthContribution {
+  const employee_share = PHILHEALTH_EE_SHARE
+  const employer_share = PHILHEALTH_ER_SHARE
+  const total = Math.round((employee_share + employer_share) * 100) / 100
 
   return { employee_share, employer_share, total }
 }

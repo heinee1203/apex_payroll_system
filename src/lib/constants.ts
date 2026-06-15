@@ -27,9 +27,10 @@ export const UT_INCREMENT_MINUTES = 15
 export const UT_DEDUCTION_PER_INCREMENT = 0.25 // hours
 
 // Government contributions
-export const PAGIBIG_EE_SHARE = 100
-export const PAGIBIG_ER_SHARE = 100
-export const PHILHEALTH_RATE = 0.05
+export const PAGIBIG_EE_SHARE = 200
+export const PAGIBIG_ER_SHARE = 200
+export const PHILHEALTH_EE_SHARE = 362.5
+export const PHILHEALTH_ER_SHARE = 362.5
 
 // Remarks options
 export const REMARK_OPTIONS = [

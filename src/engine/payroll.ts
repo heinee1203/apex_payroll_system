@@ -79,7 +79,7 @@ export function computePayroll(
     sssEE = lookupSSS(employee.basic_pay, sssBrackets).ee_share
   }
   if (payPeriod.philhealth_deduct) {
-    philhealthEE = computePhilHealth(employee.basic_pay).employee_share
+    philhealthEE = computePhilHealth().employee_share
   }
   if (payPeriod.pagibig_deduct) {
     pagibigEE = computePagIBIG().employee_share

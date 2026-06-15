@@ -8,7 +8,7 @@ export interface PagIBIGContribution {
 /**
  * Compute Pag-IBIG contribution.
  *
- * Fixed: ₱200/month (₱100 EE + ₱100 ER) for most brackets.
+ * Fixed employee deduction per first-half payroll.
  *
  * @returns Pag-IBIG contribution amounts
  */
