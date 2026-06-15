@@ -2645,6 +2645,7 @@ function formatPayslipHours(hours: number): string {
 }
 
 function formatAbsenceLabel(absences: number): string {
+  if (absences <= 0) return 'ABSENCES'
   const dayLabel = absences === 1 ? 'DAY' : 'DAYS'
   return `ABSENCES ( ${absences} ${dayLabel} )`
 }
