@@ -1,28 +1,50 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Toaster, toast } from 'sonner'
 import { PayrollWorkspace } from '../features/workspace/PayrollWorkspace'
 
-const AUTH_SESSION_KEY = 'apex-payroll-authenticated'
-const AUTH_EMAIL = 'admin@apex.com'
-const AUTH_PASSWORD_HASH = 'b45a3bb8623d2ac9c258d2f7477bb42d32db59e7f94f2d493b3cdf5626e65136'
+type AuthState = 'checking' | 'authenticated' | 'unauthenticated'
 
 export default function App() {
-  const [authenticated, setAuthenticated] = useState(() => sessionStorage.getItem(AUTH_SESSION_KEY) === 'true')
+  const [authState, setAuthState] = useState<AuthState>('checking')
+
+  useEffect(() => {
+    let cancelled = false
+
+    fetch('/api/session', { credentials: 'same-origin' })
+      .then((response) => response.ok ? response.json() as Promise<{ authenticated: boolean }> : { authenticated: false })
+      .then((session) => {
+        if (!cancelled) setAuthState(session.authenticated ? 'authenticated' : 'unauthenticated')
+      })
+      .catch(() => {
+        if (!cancelled) setAuthState('unauthenticated')
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const handleAuthenticated = () => {
-    sessionStorage.setItem(AUTH_SESSION_KEY, 'true')
-    setAuthenticated(true)
+    setAuthState('authenticated')
   }
 
-  const handleLogout = () => {
-    sessionStorage.removeItem(AUTH_SESSION_KEY)
-    setAuthenticated(false)
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+    } finally {
+      setAuthState('unauthenticated')
+    }
     toast.success('Signed out')
   }
 
   return (
     <>
-      {authenticated ? (
+      {authState === 'checking' ? (
+        <SessionLoadingPage />
+      ) : authState === 'authenticated' ? (
         <PayrollWorkspace onLogout={handleLogout} />
       ) : (
         <LoginPage onAuthenticated={handleAuthenticated} />
@@ -42,10 +64,14 @@ function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) {
     setBusy(true)
 
     try {
-      const passwordHash = await hashPassword(password)
-      const valid = email.trim().toLowerCase() === AUTH_EMAIL && passwordHash === AUTH_PASSWORD_HASH
+      const response = await fetch('/api/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
 
-      if (!valid) {
+      if (!response.ok) {
         toast.error('Invalid username or password')
         return
       }
@@ -96,11 +122,14 @@ function LoginPage({ onAuthenticated }: { onAuthenticated: () => void }) {
   )
 }
 
-async function hashPassword(password: string): Promise<string> {
-  const data = new TextEncoder().encode(password)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
+function SessionLoadingPage() {
+  return (
+    <main className="flex min-h-screen items-center justify-center bg-slate-950 px-4 py-8 text-white">
+      <div className="text-center">
+        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Apex</p>
+        <h1 className="mt-1 text-2xl font-bold">Payroll Calculator</h1>
+        <p className="mt-2 text-sm text-slate-300">Checking session...</p>
+      </div>
+    </main>
+  )
 }

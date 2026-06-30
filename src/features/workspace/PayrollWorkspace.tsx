@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -45,6 +45,7 @@ import {
 import { formatCurrency, formatDate, formatDateShort, formatHours, formatTimeDisplay } from '../../utils/format'
 
 const STORAGE_KEY = 'apex-payroll-workspace-v2'
+type WorkspaceSaveStatus = 'loading' | 'saving' | 'saved' | 'offline'
 
 const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Clock }> = [
   { id: 'logs', label: 'Time Logs', icon: Clock },
@@ -54,7 +55,7 @@ const navItems: Array<{ id: WorkspaceView; label: string; icon: typeof Clock }> 
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
-export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
+export function PayrollWorkspace({ onLogout }: { onLogout?: () => void | Promise<void> }) {
   const [workspace, setWorkspace] = useState<WorkspaceState>(() => loadWorkspace())
   const [view, setView] = useState<WorkspaceView>('logs')
   const [selectedEmployeeId, setSelectedEmployeeId] = useState(() => {
@@ -74,10 +75,83 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
   const [ocrProgress, setOcrProgress] = useState(0)
   const [ocrBusy, setOcrBusy] = useState(false)
   const [timeLogsDirty, setTimeLogsDirty] = useState(false)
+  const [workspaceSaveStatus, setWorkspaceSaveStatus] = useState<WorkspaceSaveStatus>('loading')
+  const remoteWorkspaceLoadedRef = useRef(false)
+  const saveTimerRef = useRef<number | undefined>(undefined)
+  const lastSavedWorkspaceRef = useRef('')
 
   useEffect(() => {
     saveWorkspace(workspace)
-  }, [workspace])
+    if (!remoteWorkspaceLoadedRef.current) return
+
+    const serialized = JSON.stringify(workspace)
+    if (serialized === lastSavedWorkspaceRef.current) {
+      setWorkspaceSaveStatus('saved')
+      return
+    }
+
+    setWorkspaceSaveStatus('saving')
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+
+    saveTimerRef.current = window.setTimeout(() => {
+      void saveWorkspaceDocument(workspace)
+        .then(() => {
+          lastSavedWorkspaceRef.current = serialized
+          setWorkspaceSaveStatus('saved')
+        })
+        .catch((error) => {
+          if (isUnauthorizedError(error)) void onLogout?.()
+          setWorkspaceSaveStatus('offline')
+        })
+    }, 800)
+
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    }
+  }, [onLogout, workspace])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const hydrateWorkspace = async () => {
+      const localWorkspace = loadStoredWorkspace()
+
+      try {
+        const remoteWorkspace = await fetchWorkspaceDocument()
+        const nextWorkspace = normalizeWorkspace(remoteWorkspace || localWorkspace || createDefaultWorkspace())
+        const serialized = JSON.stringify(nextWorkspace)
+
+        if (!remoteWorkspace) {
+          await saveWorkspaceDocument(nextWorkspace)
+        }
+
+        if (cancelled) return
+
+        setWorkspace(nextWorkspace)
+        setSelectedEmployeeId(nextWorkspace.employees.find((employee) => employee.active)?.id || '')
+        setSelectedEmployeeInfoId(nextWorkspace.employees[0]?.id || '')
+        saveWorkspace(nextWorkspace)
+        lastSavedWorkspaceRef.current = serialized
+        remoteWorkspaceLoadedRef.current = true
+        setWorkspaceSaveStatus('saved')
+      } catch (error) {
+        if (cancelled) return
+        if (isUnauthorizedError(error)) {
+          void onLogout?.()
+          return
+        }
+        remoteWorkspaceLoadedRef.current = true
+        setWorkspaceSaveStatus('offline')
+      }
+    }
+
+    void hydrateWorkspace()
+
+    return () => {
+      cancelled = true
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+    }
+  }, [onLogout])
 
   useEffect(() => {
     if (workspace.employees.some((employee) => employee.id === selectedEmployeeInfoId)) return
@@ -147,9 +221,35 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
     [logsInPeriod, selectedEmployee?.id]
   )
   const selectedSummary = summaries.find((summary) => summary.employee.id === selectedEmployee?.id)
+  const workspaceSaveBadge = getWorkspaceSaveBadge(workspaceSaveStatus)
+
+  const persistWorkspaceNow = (nextWorkspace: WorkspaceState) => {
+    saveWorkspace(nextWorkspace)
+
+    if (!remoteWorkspaceLoadedRef.current) return
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+
+    const serialized = JSON.stringify(nextWorkspace)
+    if (serialized === lastSavedWorkspaceRef.current) {
+      setWorkspaceSaveStatus('saved')
+      return
+    }
+
+    setWorkspaceSaveStatus('saving')
+    void saveWorkspaceDocument(nextWorkspace)
+      .then(() => {
+        lastSavedWorkspaceRef.current = serialized
+        setWorkspaceSaveStatus('saved')
+      })
+      .catch((error) => {
+        if (isUnauthorizedError(error)) void onLogout?.()
+        setWorkspaceSaveStatus('offline')
+      })
+  }
 
   const saveTimeLogs = () => {
     saveWorkspace(workspace)
+    persistWorkspaceNow(workspace)
     setTimeLogsDirty(false)
     toast.success('Time logs saved')
   }
@@ -598,7 +698,7 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
             </div>
           )}
           <div className="hidden border-t border-slate-800 px-4 py-3 text-xs text-slate-500 lg:block">
-            Local workspace
+            Database workspace
           </div>
         </aside>
 
@@ -615,6 +715,7 @@ export function PayrollWorkspace({ onLogout }: { onLogout?: () => void }) {
                   ) : (
                     <span className="badge-success">Ready</span>
                   )}
+                  <span className={workspaceSaveBadge.className}>{workspaceSaveBadge.label}</span>
                 </div>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -2269,6 +2370,13 @@ function Metric({ label, value, danger, strong }: { label: string; value: string
   )
 }
 
+function getWorkspaceSaveBadge(status: WorkspaceSaveStatus) {
+  if (status === 'loading') return { label: 'Loading data', className: 'badge-info' }
+  if (status === 'saving') return { label: 'Saving...', className: 'badge-warning' }
+  if (status === 'offline') return { label: 'Offline cache', className: 'badge-warning' }
+  return { label: 'Saved', className: 'badge-success' }
+}
+
 function SwitchRow({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
   return (
     <label className="flex items-center justify-between gap-3 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700">
@@ -3051,26 +3159,31 @@ function numberFromInput(value: string): number {
 }
 
 function loadWorkspace(): WorkspaceState {
-  const fallback = createDefaultWorkspace()
+  return loadStoredWorkspace() || createDefaultWorkspace()
+}
 
+function loadStoredWorkspace(): WorkspaceState | null {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return fallback
-    const parsed = JSON.parse(raw) as WorkspaceState
-    const mergedEmployees = parsed.employees?.length ? parsed.employees : fallback.employees
-
-    return migrateWorkspace({
-      ...fallback,
-      ...parsed,
-      settings: { ...fallback.settings, ...parsed.settings },
-      employees: mergedEmployees,
-      logs: parsed.logs?.length ? parsed.logs : fallback.logs,
-      depositSlips: Array.isArray(parsed.depositSlips) ? parsed.depositSlips : fallback.depositSlips,
-      finalizedPayrolls: Array.isArray(parsed.finalizedPayrolls) ? parsed.finalizedPayrolls : fallback.finalizedPayrolls,
-    })
+    return raw ? normalizeWorkspace(JSON.parse(raw) as Partial<WorkspaceState>) : null
   } catch {
-    return fallback
+    return null
   }
+}
+
+function normalizeWorkspace(value: Partial<WorkspaceState>): WorkspaceState {
+  const fallback = createDefaultWorkspace()
+  const mergedEmployees = value.employees?.length ? value.employees : fallback.employees
+
+  return migrateWorkspace({
+    ...fallback,
+    ...value,
+    settings: { ...fallback.settings, ...value.settings },
+    employees: mergedEmployees,
+    logs: value.logs?.length ? value.logs : fallback.logs,
+    depositSlips: Array.isArray(value.depositSlips) ? value.depositSlips : fallback.depositSlips,
+    finalizedPayrolls: Array.isArray(value.finalizedPayrolls) ? value.finalizedPayrolls : fallback.finalizedPayrolls,
+  })
 }
 
 function migrateWorkspace(workspace: WorkspaceState): WorkspaceState {
@@ -3138,6 +3251,41 @@ function saveWorkspace(workspace: WorkspaceState) {
   } catch {
     // Local storage can fail in private contexts; the app still works in memory.
   }
+}
+
+class WorkspaceApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+
+async function fetchWorkspaceDocument(): Promise<Partial<WorkspaceState> | null> {
+  const response = await fetch('/api/workspace', {
+    credentials: 'same-origin',
+  })
+
+  if (!response.ok) throw new WorkspaceApiError(response.status, 'Unable to load workspace')
+
+  const payload = await response.json() as { workspace?: Partial<WorkspaceState> | null }
+  return payload.workspace || null
+}
+
+async function saveWorkspaceDocument(workspace: WorkspaceState): Promise<void> {
+  const response = await fetch('/api/workspace', {
+    method: 'PUT',
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ workspace }),
+  })
+
+  if (!response.ok) throw new WorkspaceApiError(response.status, 'Unable to save workspace')
+}
+
+function isUnauthorizedError(error: unknown): boolean {
+  return error instanceof WorkspaceApiError && error.status === 401
 }
 
 function downloadCsv(fileName: string, rows: Array<Array<string | number>>) {
