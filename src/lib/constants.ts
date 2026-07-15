@@ -16,6 +16,7 @@ export const WORKING_DAYS_PER_MONTH = 24
 export const GRACE_PERIOD_MINUTES = 15
 export const LATE_INCREMENT_MINUTES = 15
 export const LATE_DEDUCTION_PER_INCREMENT = 0.25 // hours
+export const MAX_LATE_HOURS_BEFORE_UNDERTIME = 2
 
 // Overtime rules
 export const OT_INCREMENT_MINUTES = 30

@@ -6,7 +6,7 @@ import { computePhilHealth } from './philhealth'
 import { getDailyRate, getHourlyRate, computeScheduledHours } from './time'
 import { computeUndertimeHours } from './undertime'
 import { lookupSSS } from './sss'
-import { OT_RATE_MULTIPLIER } from '../lib/constants'
+import { MAX_LATE_HOURS_BEFORE_UNDERTIME, OT_RATE_MULTIPLIER } from '../lib/constants'
 
 export type PayType = 'monthly' | 'daily'
 export type TimeLogStatus = 'present' | 'absent' | 'paid_leave' | 'holiday' | 'legal_holiday' | 'non_working_holiday' | 'rest_day'
@@ -368,12 +368,15 @@ export function computeDailyLog(employee: EmployeeRecord, log: TimeLogEntry): Da
     }
   }
 
-  const lateHours = incomplete || isSaturday(log.date)
+  const arrivalDelayHours = incomplete || isSaturday(log.date)
     ? 0
     : computeLateHours(log.timeIn, employee.schedule.start)
-  const undertimeHours = incomplete || isSaturday(log.date)
+  const earlyDepartureHours = incomplete || isSaturday(log.date)
     ? 0
     : computeUndertimeHours(log.timeOut, employee.schedule.end)
+  const arrivalDelayIsUndertime = arrivalDelayHours > MAX_LATE_HOURS_BEFORE_UNDERTIME
+  const lateHours = arrivalDelayIsUndertime ? 0 : arrivalDelayHours
+  const undertimeHours = earlyDepartureHours + (arrivalDelayIsUndertime ? arrivalDelayHours : 0)
   const overtimeHours = log.otApproved && !incomplete
     ? computeOvertimeHours(log.timeOut, employee.schedule.end)
     : 0
