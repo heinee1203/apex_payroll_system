@@ -403,7 +403,6 @@ export function computeEmployeePayroll(
   options: PayrollComputationOptions = {}
 ): PayrollSummary {
   const monthlyPayableDays = Math.max(1, getMonthlyNonSundayDays(settings.periodStart))
-  const periodPayableDays = countNonSundayDays(settings.periodStart, settings.periodEnd)
   const dailyRate = employee.payType === 'monthly'
     ? employee.basicPay / monthlyPayableDays
     : getDailyRate(employee.basicPay, employee.payType)
@@ -430,7 +429,7 @@ export function computeEmployeePayroll(
   }
 
   const grossPay = employee.payType === 'monthly'
-    ? roundMoney(periodPayableDays * dailyRate)
+    ? roundMoney(employee.basicPay / 2)
     : roundMoney(paidDays * dailyRate)
   const overtimePay = roundMoney(overtimeHours * hourlyRate * OT_RATE_MULTIPLIER)
   const lateDeduction = roundMoney(lateHours * hourlyRate)
